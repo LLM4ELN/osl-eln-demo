@@ -2,7 +2,16 @@
 
 ## Prerequisites
 
-Follow https://github.com/LLM4ELN/llm4eln-assessment to set up the project, virtual environment and llm provider (step 1-3=.
+Follow https://github.com/LLM4ELN/llm4eln-assessment to set up the project, virtual environment and llm provider (step 1-3).
+
+Make sure to install the additional packages `opensemantic.lab` and `"git+https://github.com/OpenSemanticLab/osw-python"`, overall
+```bash
+ uv add langchain langchain-openai langchain-ollama langchain-anthropic langchain-google-genai langchain-ollama python-dotenv opensemantic.lab "git+https://github.com/OpenSemanticLab/osw-python"
+```
+or use
+```bash
+uv sync
+```
 
 ### OSL Login
 
