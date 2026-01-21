@@ -1,3 +1,4 @@
+""" Interesting tools """
 def is_object(item):
     return item is not None and isinstance(item, dict)
 

@@ -1,9 +1,10 @@
+""" Initialize the language model and expose an llm-instance, if API-PROVIDER executed"""
 from dotenv import load_dotenv
 from os import environ
 load_dotenv()
 
-# Initialize the language model
 
+print('Using API provider:', environ.get("API_PROVIDER"))
 if environ.get("API_PROVIDER") == "azure":
     # https://docs.langchain.com/oss/python/integrations/providers/microsoft
     from langchain_openai import AzureChatOpenAI
@@ -14,12 +15,12 @@ if environ.get("API_PROVIDER") == "azure":
         azure_endpoint=environ.get("API_ENDPOINT")
     )
 
-if environ.get("API_PROVIDER") == "ollama":
+elif environ.get("API_PROVIDER") == "ollama":
     # https://docs.langchain.com/oss/python/integrations/chat/ollama
     from langchain_ollama import ChatOllama
     llm = ChatOllama(model=environ.get("API_MODEL"))
 
-if environ.get("API_PROVIDER") == "blablador":
+elif environ.get("API_PROVIDER") == "blablador":
     # https://sdlaml.pages.jsc.fz-juelich.de/ai/guides/blablador_api_access/
     from langchain_openai import ChatOpenAI
     llm = ChatOpenAI(
@@ -28,11 +29,12 @@ if environ.get("API_PROVIDER") == "blablador":
         base_url=environ.get("API_ENDPOINT")
     )
 
-if environ.get("API_PROVIDER") == "openai":
+elif environ.get("API_PROVIDER") == "openai":
     from langchain_openai import ChatOpenAI
-    llm = ChatOpenAI(api_key=environ.get("API_KEY"))
+    llm = ChatOpenAI(api_key=environ.get("API_KEY"),
+                    model=environ.get("API_MODEL"))
 
-if environ.get("API_PROVIDER") == "chatai":
+elif environ.get("API_PROVIDER") == "chatai":
     from langchain_openai import ChatOpenAI
     llm = ChatOpenAI(
         api_key=environ.get("API_KEY"),
@@ -40,10 +42,13 @@ if environ.get("API_PROVIDER") == "chatai":
         model=environ.get("API_MODEL")
     )
 
-if environ.get("API_PROVIDER") == "gemini":
+elif environ.get("API_PROVIDER") == "gemini":
     from langchain_openai import ChatOpenAI
     from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: E402
     llm = ChatGoogleGenerativeAI(
         api_key=environ.get("API_KEY"),
         model=environ.get("API_MODEL")
     )
+
+else:
+    print("No API provider specified in .env file !!")
