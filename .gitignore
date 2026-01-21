@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+
+# Automatically added by osw.auth.CredentialManager.save_credentials_to_file:
+osw_files/*
+*/osw_files/*
