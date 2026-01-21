@@ -23,8 +23,8 @@ sys_prompt = (
     "leave it empty / null."
 )
 prompt = (
-    "Describe the process of PCR in a laboratory setting"
-    "starting at 01.01.2025 and ending at 02.01.2025."
+    "Describe the tensile mechanical test in a laboratory setting"
+    "starting at 01.01.2025 and ending at 02.01.2025, the displacement was applied at a strain rate of 1e-3 until fracture."
     "Status is in progress."
 )
 # Description is LLM generated
@@ -35,7 +35,13 @@ prompt = (
 # with https://platform.openai.com/docs/guides/structured-outputs#supported-schemas  # noqa: E501
 
 data_model = LaboratoryProcess
-schema = data_model.export_schema()  # Very long schema: how did they create it???
+# To add a new class
+class MyCustomClass(LaboratoryProcess):
+    another_property: str | None = None
+
+
+schema = data_model.export_schema()
+# TODO: Very long schema: how did they create it???
 provider_strategy = ProviderStrategy(schema=modify_schema(schema), strict=True) #modify schema -> openAI compliant
 agent = create_agent(model=llm, response_format=provider_strategy)
 result = agent.invoke({
@@ -47,6 +53,7 @@ result = agent.invoke({
 result = post_process_llm_json_response(result["structured_response"])
 print("\n\nStructured Response:", json.dumps(result, indent=2))
 # TODO sometimes I get the empty entries in the output, more often not
+# => outputs.json
 
 print('\n\nUpload result to OSL...')
 # create an instance of the target data model from the result

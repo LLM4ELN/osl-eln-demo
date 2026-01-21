@@ -1,0 +1,52 @@
+{
+    "Structured Response1": {
+        "rdf_type": [],
+        "exact_ontology_match": [],
+        "close_ontology_match": [],
+        "name": "PCR_Process_2025",
+        "label": [
+            {
+                "text": "Polymerase Chain Reaction (PCR) Process",
+                "lang": "en"
+            }
+        ],
+        "short_name": [],
+        "description": [
+            {
+                "text": "This document provides a detailed description of the Polymerase Chain Reaction (PCR) process, which is a widely used technique to amplify segments of DNA in a laboratory setting. The process involves a series of temperature cycles to achieve DNA denaturation, annealing, and elongation.",
+                "lang": "en"
+            }
+        ],
+        "classification_categories": [],
+        "keywords": [],
+        "based_on": [],
+        "attachments": [],
+        "actionees": [],
+        "start_date_time": "2025-01-01T00:00:00Z",
+        "end_date_time": "2025-01-02T00:00:00Z",
+        "status": "Item:OSWa2b4567ad4874ea1b9adfed19a3d06d1",
+        "approver": [],
+        "raw_data_files": [],
+        "analyzed_data_files": []
+    },
+    "Structured Response2": {
+        "rdf_type": [],
+        "exact_ontology_match": [],
+        "close_ontology_match": [],
+        "label": [
+            {
+                "text": "Tensile Mechanical Test",
+                "lang": "en"
+            }
+        ],
+        "description": [
+            {
+                "text": "This laboratory process involves performing a tensile mechanical test. The test starts on 01.01.2025 and ends on 02.01.2025. During this test, displacement is applied at a strain rate of 1e-3 until the specimen fractures.",
+                "lang": "en"
+            }
+        ],
+        "start_date_time": "2025-01-01T00:00:00Z",
+        "end_date_time": "2025-01-02T00:00:00Z",
+        "status": "Item:OSWa2b4567ad4874ea1b9adfed19a3d06d1"
+    }
+}
