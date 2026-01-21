@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-Follow https://github.com/LLM4ELN/llm4eln-assessment to set up the project, virtual environment and llm provider.
+Follow https://github.com/LLM4ELN/llm4eln-assessment to set up the project, virtual environment and llm provider (step 1-3=.
 
 ### OSL Login
 
@@ -33,5 +33,8 @@ OSW_PASSWORD=<bot-password>
 ```bash
 python main.py
 ```
+
+You should not see any error in the console.
+A link should be logged that points to the generated entry in the demo instance - open it in your browser to validate the results.
 
 
