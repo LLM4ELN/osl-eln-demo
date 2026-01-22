@@ -1,7 +1,9 @@
 import json
+from uuid import uuid4
 from langchain.agents import create_agent
 from os import environ
 from langchain.agents.structured_output import ProviderStrategy
+from langchain_core.messages.tool import tool_call
 from langchain_core.tools import tool
 from openai.types.responses import tool_choice_allowed
 from rdflib import Graph, URIRef
@@ -276,13 +278,16 @@ def schema_type(iri):
 
 
 def schema_string():
+    # return {
+    #     "type": "array",
+    #     "items": {
+    #         "type": "object",
+    #         "properties": {"@value": {"type": "string"}},
+    #         "required": ["@value"],
+    #     },
+    # }
     return {
-        "type": "array",
-        "items": {
-            "type": "object",
-            "properties": {"@value": {"type": "string"}},
-            "required": ["@value"],
-        },
+        "type": "string",
     }
 
 
@@ -310,7 +315,10 @@ schema = {
     "description": "A very minimal JSON schema for the hardness test processes.",
     "type": "object",
     "properties": {
-        "@id": {"type": "string"},
+        "@id": {
+            "type": "string",
+            "pattern": "^http://example.org/data/*",
+        },
         "@type": schema_type("http://example.org#HardnessTest"),
         "http://www.w3.org/2000/01/rdf-schema#label": schema_string(),
         "http://www.w3.org/2000/01/rdf-schema#comment": schema_string(),
@@ -320,7 +328,10 @@ schema = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "@id": {"type": "string"},
+                    "@id": {
+                        "type": "string",
+                        "pattern": "^http://example.org/data/*",
+                    },
                     "@type": schema_type("http://example.org#Sample"),
                     "http://www.w3.org/2000/01/rdf-schema#label": schema_string(),
                     "http://www.w3.org/2000/01/rdf-schema#comment": schema_string(),
@@ -348,6 +359,7 @@ schema = {
                         "@id": {
                             "type": "string",
                             "pattern": "^http://qudt.org/vocab/unit/*",
+                            "tool": "search_unit",
                         },
                     },
                     "required": ["@id"],
@@ -380,9 +392,13 @@ prompt = "Please extract data of this document."
 
 sys_prompt = (
     "You are an expert laboratory assistant. "
+    ""
     "You always answer in valid JSON according to the provided schema. "
     "If a field is not specified, leave it empty or null. "
     "Do not add any additional fields that are not defined in the schema. "
+    ""
+    "If you encounter the property '@id' mint a new IRI for its value. "
+    ""
     "If you encounter a value which starts with http://qudt.org/vocab/unit/, "
     "use the tool 'search_unit' to look up the value. "
 )
@@ -391,8 +407,23 @@ sys_prompt = (
 units = Graph().parse("unit.ttl")
 
 
+@tool(
+    "mint_iri",
+    description="mint a new IRI",
+)
+def mint_iri():
+    """Mint a new IRI."""
+
+    prefix = "http://example.org/data/"
+
+    breakpoint()
+
+    return f"{prefix}{uuid4()}"
+
+
+@tool("search_unit", description="search for the IRI of a value")
 def search_unit(query: str) -> str:
-    """Get QUDT unit IRI for a given query."""
+    """Look up an IRI for value."""
 
     query = f"""
     PREFIX qudt: <http://qudt.org/schema/qudt/>
@@ -416,14 +447,20 @@ def search_unit(query: str) -> str:
     if len(result.bindings) > 0:
         return URIRef(result.bindings[0]["unit"])
 
+
 provider_strategy = ProviderStrategy(
     schema=schema,
     strict=True,
 )
 
+
 agent = create_agent(
     model=llm,
-    tools=[search_unit],
+    tools=[
+        mint_iri,
+        search_unit,
+    ],
+    system_prompt=sys_prompt,
     response_format=provider_strategy,
 )
 
@@ -432,7 +469,7 @@ result = agent.invoke(
         "messages": [
             {
                 "role": "user",
-                "content": sys_prompt + "\n\n" + prompt,
+                "content": prompt,
             },
             {
                 "role": "user",
