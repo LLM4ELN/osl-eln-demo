@@ -40,7 +40,8 @@ sys_prompt = (
     "leave it empty or null. "
     "Do not add any additional fields that are not defined in the schema. "
     "If you encounter a property that is annotated with a 'range', "
-    "use the tool 'lookup_or_create_entity' to lookup or create the referenced entity."
+    "use the tool 'lookup_or_create_entity' to "
+    "lookup or create the referenced entity."
     "Store the returned ID (if not None) in the corresponding fields."
 )
 
@@ -66,41 +67,50 @@ entitity_requests = {}
 
 
 def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
-    """lookup an entity by schema ID and description containing all available information,
-    or create it if not found.
+    """lookup an entity by schema ID and description
+    containing all available information, or create it if not found.
     return the entity's title / ID.
     """
-    print(f"Lookup or create entity for property '{param.property_name}', range '{param.schema_id}, {param.schema_name}' based on description {param.entity_description}")
-    
+    print((
+      f"Lookup or create entity for property '{param.property_name}', "
+      f"range '{param.schema_id}, {param.schema_name}' "
+      f"based on description {param.entity_description}"
+    ))
+
     entity_uuid = uuid.uuid4()
     entity_id = "Item:OSW" + entity_uuid.hex
     entitity_requests[entity_id] = param
-    
+
     prompt = ""
     if param.schema_id != "":
         prompt = "The schema id is " + param.schema_id + ". "
     if param.schema_name != "":
         prompt += "The schema name is " + param.schema_name + ". "
     if param.entity_description != "":
-        prompt += "The entity it want to describe: " + param.entity_description + ". "
+        prompt += "The entity it want to describe: "
+        prompt += param.entity_description + ". "
     schema_name = lookup_exact_schema(prompt)
     print(f"LLM returned class path: {schema_name}")
 
     # get the class from the path
     schema_cls: OswBaseModel = eval(schema_name)
-    
+
     if schema_cls is None:
-        # raise ValueError(f"Schema name {param.schema_name} not found in opensemantic modules")
-        print(f"Schema name {param.schema_name} not found in opensemantic modules")
+        # raise ValueError(
+        # f"Schema name {param.schema_name} not found in opensemantic modules"
+        # )
+        print(
+          f"Schema name {param.schema_name} not found in opensemantic modules"
+        )
         return None
     else:
         print(f"Found schema class for {param.schema_name}: {schema_cls}")
-        
+
     # create a structured output agent with a provider strategy
     # based on the target data model's schema
     # preprocess the schema to comply
     # with https://platform.openai.com/docs/guides/structured-outputs#supported-schemas  # noqa: E501
-    
+
     try:
         # Fixme: schema contains "definitions" instead of "$defs"
         # but $refs are pointing to ""
@@ -113,10 +123,10 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
         schema=target_schema,
         strict=True
     )
-    
+
     model = get_llm()
     model.max_retries = 1
-    
+
     agent = create_agent(
         model=get_llm(),
         response_format=provider_strategy,
@@ -147,14 +157,14 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
 
     print(f"Structured Response for {param.schema_name}:")
     print(json.dumps(result, indent=2))
-    
+
     # create an instance of the target data model from the result
     try:
         data_instance: OswBaseModel = schema_cls(**result)
     except Exception as e:
         print(f"Error creating data instance: {e}")
         return None
-    
+
     entitites[data_instance.get_iri()] = data_instance
     return data_instance.get_iri()
 
