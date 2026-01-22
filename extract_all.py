@@ -250,7 +250,7 @@ def lookup_unit(unit_str: str) -> URIRef:
     """
     res = units_graph.query(query)
     for row in res:
-        return row.unit
+        return row.unit # actually, not quite right, for /s it finds 2 and the returns the wrong one (NUM-PER-SEC)
     # fallback safe URI
     
     if not res:
