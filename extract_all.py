@@ -260,7 +260,7 @@ def lookup_unit(unit_str: str) -> URIRef:
             unit_str = unit_str.replace('1/', '/')
             print("new unit string:", unit_str)
             return lookup_unit(unit_str)
-        else:
+        else: # fallback will probably not be ok... find another solution later
             safe_unit = unit_str.replace("/", "_per_").replace(" ", "_")
             fallback_iri = URIRef(f"http://qudt.org/vocab/unit/{safe_unit}")
             print("using fallback IRI:", fallback_iri)
