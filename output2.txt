@@ -1,0 +1,243 @@
+Using API provider: openai
+Hint: The extra dependency 'osw[wikitext]' is required for the full functionality of wiki_tools module.
+Credentials file updated at '/home/steffen/FZJ/Funding/NFDI4Mat/LLM4ELN/osl-eln-demo/osw_files/accounts.pwd.yaml'.
+Connecting to 'llm4eln.semos.dev'...
+Connected to 'llm4eln.semos.dev'.
+../tensileData/sonicResonanceTest/02_secondary_data/results_sonic_resonance_tests.xlsx 
+ E- und G-Modul nach ASTM E 1875:2020 Messung bei Raumtemperatur an Luft
+Materialbezeichnung: S355J2 + N
+
+Versuchsdurchführung und verwendete Prüfmittel:
+
+Raumtemperatureinrichtung vom ELASTOTRON 2000 
+Start creating original json...
+  ... end: 18.3 s
+Start creating OSL-schema-based json...
+  ... end: 34.2 s
+Start creating new schema json...
+  ... end: 11.1 s
+Start creating new-schema-based json...
+  ... end: 0.0 s
+------------------------------------------
+{                                                                                   {
+  "label": [                                                                          "testDetails": {
+    {                                                                                   "standard": "ASTM E 1875:2020",
+      "text": "Tensile Mechanical Test Documentation",                                  "temperature": "Room temperature",
+      "lang": "en"                                                                      "environment": "Air",
+    }                                                                                   "material": "S355J2 + N",
+  ],                                                                                    "equipment": [
+  "description": [                                                                        "ELASTOTRON 2000 (Fa. HTM Reetz Berlin)",
+    {                                                                                     "HP Network Analyzer",
+      "text": "Contains documentation for tensile mechanical tests including tes          "Toellner TOE 7610 Amplifier"
+      "lang": "en"                                                                      ],
+    }                                                                                   "procedureSummary": [
+  ],                                                                                      "Measurement of resonance frequency for E-Modulus in bending oscillation (
+  "status": "Item:OSWa2b4567ad4874ea1b9adfed19a3d06d1",                                   "Measurement of resonance frequency for G-Modulus in torsion oscillation",
+  "collection": true,                                                                     "Detection of anisotropy or texture by comparing E-Modulus in different or
+  "display_id": false                                                                   ]
+}                                                                                     },
+                                                                                      "results": [
+                                                                                        {
+                                                                                          "Pr-Nr.": "ERX1",
+                                                                                          "m [g]": 21.348,
+                                                                                          "L [mm]": 100.08,
+                                                                                          "b [mm]": 9.082,
+                                                                                          "h [mm]": 2.994,
+                                                                                          "rho [g/cm3]": 7.844704770253476,
+                                                                                          "ff [Hz]": 1587.428,
+                                                                                          "E [GPa]": {
+                                                                                            "fk": 210.63126769653948,
+                                                                                            "hk": 211.12126013449898,
+                                                                                            "MW": 210.87626391551925
+                                                                                          },
+                                                                                          "ft [Hz]": 8944.466,
+                                                                                          "G [GPa]": 80.38018032315216,
+                                                                                          "mu": {
+                                                                                            "fk": 0.31021892990124766,
+                                                                                            "hk": 0.3132668979201645,
+                                                                                            "MW": 0.3117429139107061
+                                                                                          }
+                                                                                        },
+                                                                                        {
+                                                                                          "Pr-Nr.": "ERX2",
+                                                                                          "m [g]": 21.362,
+                                                                                          "L [mm]": 100.05,
+                                                                                          "b [mm]": 9.067,
+                                                                                          "h [mm]": 3.002,
+                                                                                          "rho [g/cm3]": 7.844233522576833,
+                                                                                          "ff [Hz]": 1598.747,
+                                                                                          "E [GPa]": {
+                                                                                            "fk": 212.24854190237068,
+                                                                                            "hk": 212.50413455126414,
+                                                                                            "MW": 212.3763382268174
+                                                                                          },
+                                                                                          "ft [Hz]": 8901.011,
+                                                                                          "G [GPa]": 79.02479434195808,
+                                                                                          "mu": {
+                                                                                            "fk": 0.34292372204047394,
+                                                                                            "hk": 0.3445408894815398,
+                                                                                            "MW": 0.3437323057610069
+                                                                                          }
+                                                                                        },
+                                                                                        {
+                                                                                          "Pr-Nr.": "ERY1",
+                                                                                          "m [g]": 21.361,
+                                                                                          "L [mm]": 100.08,
+                                                                                          "b [mm]": 9.083,
+                                                                                          "h [mm]": 2.995,
+                                                                                          "rho [g/cm3]": 7.845997084616571,
+                                                                                          "ff [Hz]": 1608.28,
+                                                                                          "E [GPa]": {
+                                                                                            "fk": 216.09328342233576,
+                                                                                            "hk": 216.53875661158455,
+                                                                                            "MW": 216.31602001696015
+                                                                                          },
+                                                                                          "ft [Hz]": 8936.544,
+                                                                                          "G [GPa]": 80.22359744679986,
+                                                                                          "mu": {
+                                                                                            "fk": 0.3468187060897989,
+                                                                                            "hk": 0.3495951534408679,
+                                                                                            "MW": 0.3482069297653334
+                                                                                          }
+                                                                                        },
+                                                                                        {
+                                                                                          "Pr-Nr.": "ERY2",
+                                                                                          "m [g]": 21.367,
+                                                                                          "L [mm]": 100.05,
+                                                                                          "b [mm]": 9.087,
+                                                                                          "h [mm]": 2.996,
+                                                                                          "rho [g/cm3]": 7.844479275283468,
+                                                                                          "ff [Hz]": 1606.268,
+                                                                                          "E [GPa]": {
+                                                                                            "fk": 215.11088529967742,
+                                                                                            "hk": 215.79146123506715,
+                                                                                            "MW": 215.45117326737227
+                                                                                          },
+                                                                                          "ft [Hz]": 8962.771,
+                                                                                          "G [GPa]": 80.64433082266504,
+                                                                                          "mu": {
+                                                                                            "fk": 0.3337012230450589,
+                                                                                            "hk": 0.33792083729721445,
+                                                                                            "MW": 0.33581103017113667
+                                                                                          }
+                                                                                        }
+                                                                                      ],
+                                                                                      "uncertainty": {
+                                                                                        "description": "The measurement uncertainty is determined according to GUM, 
+                                                                                        "value": "\u00b11%",
+                                                                                        "confidenceInterval": "95% confidence interval",
+                                                                                        "temperature": "Room temperature measurement"
+                                                                                      },
+                                                                                      "department": "Fachbereich 5.2 Experimentelle und modellbasierte Werkstoffmech
+                                                                                      "inCharge": {}
+                                                                                    }
+
+
+---------- Which is better?  -------------
+
+
+Upload result to OSL...
+Entities to be uploaded have been sorted according to their type.
+If you would like to overwrite existing entities or properties, pass a StoreEntityParam to store_entity() with attribute 'overwrite' or 'overwrite_per_class' set to, e.g., True.
+Performing parallel execution of handle_upload_object_ (1 tasks).
+(1/1) Entity stored at 'https://llm4eln.semos.dev/wiki/Item:OSW8b90c6c12f254eb39bac576f03b807d0'.
+../tensileData/tensileTest/02_secondary_data/results_protocols/Protokoll-Zugversuch RT Zx.xlsx 
+ Prüfprotokoll Zugversuch
+
+Vorhaben-/Auftrags-Nr., AG Ontologie Zugversuch, Norm, DIN EN ISO 6892-1
+Proben - Nr., Zx1, Prüfdatum, 2021-02-22 00:00:00
+Werkstoff, S355, Prüfer, J. 
+Probenform (Z.-Nr.), E
+Start creating original json...
+  ... end: 6.2 s
+Start creating OSL-schema-based json...
+  ... end: 20.1 s
+Start creating new schema json...
+  ... end: 11.3 s
+Start creating new-schema-based json...
+  ... end: 0.0 s
+------------------------------------------
+{                                                                                   {
+  "label": [                                                                          "TestReport_TensileTest": {
+    {                                                                                   "Project/OrderNo": "AG Ontologie Zugversuch",
+      "text": "Tensile Test Protocol",                                                  "Standard": "DIN EN ISO 6892-1",
+      "lang": "en"                                                                      "SampleNo": "Zx1",
+    }                                                                                   "TestDate": "2021-02-22T00:00:00Z",
+  ],                                                                                    "Material": "S355",
+  "description": [                                                                      "Tester": "J.",
+    {                                                                                   "SampleShape": "E6x20x60",
+      "text": "Tensile test performed as per DIN EN ISO 6892-1 standard on speci        "HeatTreatment": "-",
+      "lang": "en"                                                                      "ProcedureFile": "-",
+    }                                                                                   "Remarks": "In Walzrichtung aus Stahlblech entnommen"
+  ],                                                                                  },
+  "keywords": [                                                                       "EnvironmentalConditions": {
+    {                                                                                   "RoomTempHumidityMonitoring": "ja"
+      "label": [                                                                      },
+        {                                                                             "TestParameters": {
+          "text": "Tensile Test",                                                       "SampleHeating": "-",
+          "lang": "en"                                                                  "TestTemperature": "RT",
+        }                                                                               "StrainRate": 0.00025,
+      ],                                                                                "SwitchPointPercentage": 1.6,
+      "access_policy": {                                                                "DisplacementRate": 0.536
+        "usergroup_permissions": [                                                    },
+          {                                                                           "UsedTestingEquipment": {
+            "assignee_usergroup": {                                                     "TestingMachine": "Instron 4505",
+              "label": [                                                                "ForceRange": 100,
+                {                                                                       "Extensometer": "HBM",
+                  "text": "Lab Technicians",                                            "SerialNo": "28023/28024",
+                  "lang": "en"                                                          "StrainRange": 4,
+                }                                                                       "NominalGaugeLength": 50,
+              ],                                                                        "Micrometer": "Orion Satz 1 (Werkstatt)",
+              "meta": {                                                                 "Caliper": "Orion Satz 1, BA606983",
+                "wiki_page": {                                                          "ThermoelementsNo": "-"
+                  "title": "Lab_Tech_Group"                                           },
+                }                                                                     "BeforeTestStart": {
+              },                                                                        "PretestMaxForce": "-",
+              "groupname": "lab_techs"                                                  "MaxStrain": "-",
+            },                                                                          "PretestEModule": "-",
+            "action": "odrl:read"                                                       "ReferenceEModule": "-",
+          }                                                                             "HeatingTimeToPT": "-",
+        ]                                                                               "SoakingTimeAtPT": "-",
+      }                                                                                 "StrainIndicatorPT": "-"
+    }                                                                                 },
+  ],                                                                                  "AdditionalRemarks": "Abweichend von den anderen Proben. Weggeschwindigkeit wu
+  "creator": "J.",                                                                    "Tester": "J.",
+  "actionees": [                                                                      "TestManagement": "R."
+    {                                                                               }
+      "first_name": "John",                                                         
+      "surname": "Doe"                                                              
+    }                                                                               
+  ],                                                                                
+  "start_date_time": "2021-02-22T00:00:00Z",                                        
+  "location_name": "Laboratory 5B",                                                 
+  "status": "Item:OSWf474ec34b7df451ea8356134241aef8a",                             
+  "tool": [                                                                         
+    {                                                                               
+      "tool_type": "Category:OSWe427aafafbac4262955b9f690a83405d",                  
+      "tool_default": {                                                             
+        "label": [                                                                  
+          {                                                                         
+            "text": "Instron 4505",                                                 
+            "lang": "en"                                                            
+          }                                                                         
+        ],                                                                          
+        "description": [                                                            
+          {                                                                         
+            "text": "Instron 4505 is a universal testing machine used for tensil    
+            "lang": "en"                                                            
+          }                                                                         
+        ]                                                                           
+      }                                                                             
+    }                                                                               
+  ]                                                                                 
+}                                                                                   
+
+
+---------- Which is better?  -------------
+
+
+Upload result to OSL...
+Entities to be uploaded have been sorted according to their type.
+If you would like to overwrite existing entities or properties, pass a StoreEntityParam to store_entity() with attribute 'overwrite' or 'overwrite_per_class' set to, e.g., True.
+Performing parallel execution of handle_upload_object_ (1 tasks).
+(1/1) Entity stored at 'https://llm4eln.semos.dev/wiki/Item:OSW29d148e402284af68ade4ec93fde6918'.
