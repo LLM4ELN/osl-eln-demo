@@ -229,6 +229,15 @@ def modify_schema(schema, seen_refs=None, root=None):
                 "uri", "uri-reference", "iri", "iri-reference"
             ]:
                 schema.pop("format")
+        
+        # cutoff subschemas if range annotation is present
+        if "range" in schema:
+            schema = {
+                "type": "string",
+                "range": schema["range"],
+                "title": schema.get("title", ""),
+                "description": schema.get("description", "")
+            }
 
     if root_level:
         # finally, remove $defs from root
