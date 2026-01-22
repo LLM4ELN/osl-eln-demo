@@ -39,11 +39,23 @@ OSW_PASSWORD=<bot-password>
 
 ## Run the Demo
 
+### Basic Example
+
+Construct a LaboratoryProcess entry based on a natural language description.
+
 ```bash
-python main.py
+python demo_basic.py
 ```
 
 You should not see any error in the console.
 A link should be logged that points to the generated entry in the demo instance - open it in your browser to validate the results.
+
+### Data Model Suggestion Example
+
+Lookup or suggest a data model based on a natural language description.
+
+```bash
+python schema_catalog.py
+```
 
 
