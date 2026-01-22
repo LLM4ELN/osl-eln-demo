@@ -2,19 +2,26 @@ import json
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy
 from langchain_core.messages import AIMessage
+from langchain_openai import ChatOpenAI
 
 from util import post_process_llm_json_response
 
-from llm_init import llm
+from os import environ
 from docling.document_converter import DocumentConverter
 
-# SOURCE = "data/02_secondary_data/results_protocols/Protokoll-Zugversuch RT Zx.xlsx"
-SOURCE = "data/sonic_resonance_test/01_primary_data/5.22_430_ERX1_ASTM_E1875.xlsx"
+
+SOURCE = "data/02_secondary_data/results_protocols/Protokoll-Zugversuch RT Zx.xlsx"
+# SOURCE = "data/sonic_resonance_test/01_primary_data/5.22_430_ERX1_ASTM_E1875.xlsx"
 
 converter = DocumentConverter()
 doc = converter.convert(SOURCE).document
 markdown_doc = doc.export_to_markdown()
 
+llm = ChatOpenAI(
+    model=environ.get("API_MODEL"),
+    api_key=environ.get("API_KEY"),
+    base_url=environ.get("API_ENDPOINT"),
+)
 
 ### GET SCHEMA
 
