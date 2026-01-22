@@ -1,0 +1,551 @@
+Document loaded and converted to markdown.
+| Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   |
+|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|
+
+| Vorhaben-/Auftrags-Nr.   | Vorhaben-/Auftrags-Nr.   | AG Ontologie Zugversuch   | AG Ontologie Zugversuch   |
+|--------------------------|--------------------------|---------------------------|---------------------------|
+| Proben - Nr.             | Proben - Nr.             | Zx1                       | Zx1                       |
+| Werkstoff                | Werkstoff                | S355                      | S355                      |
+| Probenform (Z.-Nr.)      | Probenform (Z.-Nr.)      | E6x20x60                  | E6x20x60                  |
+| Wärmebehandlung          | Wärmebehandlung          | -                         | -                         |
+| Prozedur/Vers.file:      | Prozedur/Vers.file:      | -                         | -                         |
+
+| Norm         | Norm         | DIN EN ISO 6892-1   | DIN EN ISO 6892-1   | DIN EN ISO 6892-1   |
+|--------------|--------------|---------------------|---------------------|---------------------|
+| Prüfdatum    | Prüfdatum    | 2021-02-22 00:00:00 | 2021-02-22 00:00:00 | 2021-02-22 00:00:00 |
+| Prüfer       | Prüfer       | J.                  | J.                  | J.                  |
+| Prüfleitung  | Prüfleitung  | None                | None                | None                |
+| Datenfile(s) | Datenfile(s) | None                | None                | None                |
+| LIS-Datei    | LIS-Datei    | None                | None                | None                |
+
+| Bemerkungen   | Bemerkungen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   |
+|---------------|---------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|
+
+| Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   |
+|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|
+
+| Überwachung von Raumtemp./-feuchte   |
+|--------------------------------------|
+
+| ja   | ja   |
+|------|------|
+
+| Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   |
+|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|
+
+| Probenerwärmung     | Probenerwärmung     | -          | -          | -    |
+|---------------------|---------------------|------------|------------|------|
+| Dehngeschwindigkeit | Dehngeschwindigkeit | 0.00025    | 0.00025    | 1/s  |
+| Umschaltpunkt       | Umschaltpunkt       | 1,6 %      | 1,6 %      | None |
+| Weggeschwindigkeit  | Weggeschwindigkeit  | 0,536 mm/s | 0,536 mm/s | None |
+
+| Prüftemperatur   | Prüftemperatur   | RT   | RT   | RT   | °C   |
+|------------------|------------------|------|------|------|------|
+
+| verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   |
+|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|
+
+| Prüfmaschine   | Prüfmaschine   | Instron 4505   | Instron 4505   |
+|----------------|----------------|----------------|----------------|
+
+| Kraftbereich   | Kraftbereich   | 100   | 100   | 100   | kN   |
+|----------------|----------------|-------|-------|-------|------|
+
+| Extensometer   | Extensometer   | HBM; Serien-Nr.: 28023/28024   | HBM; Serien-Nr.: 28023/28024   |
+|----------------|----------------|--------------------------------|--------------------------------|
+
+| Dehnungsbereich     | Dehnungsbereich     |   4 |   4 |   4 | %   |
+|---------------------|---------------------|-----|-----|-----|-----|
+| Nenngerätemesslänge | Nenngerätemesslänge |  50 |  50 |  50 | mm  |
+
+| Mikrometerschraube   | Mikrometerschraube   | Orion Satz 1 (Werkstatt)   | Orion Satz 1 (Werkstatt)   |
+|----------------------|----------------------|----------------------------|----------------------------|
+
+| Messschieber   | Messschieber   | Orion Satz 1, BA606983   | Orion Satz 1, BA606983   | Orion Satz 1, BA606983   |
+|----------------|----------------|--------------------------|--------------------------|--------------------------|
+
+| Thermoelemente Nr.   | Thermoelemente Nr.   | -                    | -                    | -                    | -                    | -                    | -                    | -                    | -                    | -                    |
+|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|
+| None                 | None                 | None                 | None                 | None                 | None                 | None                 | None                 | None                 | None                 | None                 |
+| vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart |
+
+| Vorversuch Kraft max.   | Vorversuch Kraft max.   | -    | -    | kN   |
+|-------------------------|-------------------------|------|------|------|
+| Vorversuch E-Modul      | Vorversuch E-Modul      | -    | -    | GPa  |
+| Aufheizzeit bis PT      | Aufheizzeit bis PT      | -    | -    | min  |
+| Dehnungsanzeige RT      | Dehnungsanzeige RT      | None | None | %    |
+
+| Dehnung max.         |
+|----------------------|
+| Referenzwert E-Modul |
+| Durchwärmzeit bei PT |
+| Dehnungsanzeige PT   |
+
+| -   | -   | -   | %   |
+|-----|-----|-----|-----|
+| -   | -   | -   | GPa |
+| -   | -   | -   | min |
+| -   | -   | -   | %   |
+
+| Bemerkungen   | Bemerkungen   | Abweichend von den anderen Proben. Weggeschwindigkeit wurde erhöht.   | Abweichend von den anderen Proben. Weggeschwindigkeit wurde erhöht.   | Abweichend von den anderen Proben. Weggeschwindigkeit wurde erhöht.   | Abweichend von den anderen Proben. Weggeschwindigkeit wurde erhöht.   | Abweichend von den anderen Proben. Weggeschwindigkeit wurde erhöht.   | Abweichend von den anderen Proben. Weggeschwindigkeit wurde erhöht.   | Abweichend von den anderen Proben. Weggeschwindigkeit wurde erhöht.   | Abweichend von den anderen Proben. Weggeschwindigkeit wurde erhöht.   | Abweichend von den anderen Proben. Weggeschwindigkeit wurde erhöht.   |
+|---------------|---------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------|
+
+| J.     | J.     | J.     |
+|--------|--------|--------|
+| J.     | J.     | J.     |
+| J.     | J.     | J.     |
+| Prüfer | Prüfer | Prüfer |
+
+| R.          | R.          | R.          | R.          |
+|-------------|-------------|-------------|-------------|
+| R.          | R.          | R.          | R.          |
+| R.          | R.          | R.          | R.          |
+| Prüfleitung | Prüfleitung | Prüfleitung | Prüfleitung |
+
+| Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   | Prüfprotokoll Zugversuch   |
+|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|
+
+| Vorhaben-/Auftrags-Nr.   | Vorhaben-/Auftrags-Nr.   | AG Ontologie Zugversuch   | AG Ontologie Zugversuch   |
+|--------------------------|--------------------------|---------------------------|---------------------------|
+| Proben - Nr.             | Proben - Nr.             | Zx2 / Zx3 / Zx4           | Zx2 / Zx3 / Zx4           |
+| Werkstoff                | Werkstoff                | S355                      | S355                      |
+| Probenform (Z.-Nr.)      | Probenform (Z.-Nr.)      | E6x20x60                  | E6x20x60                  |
+| Wärmebehandlung          | Wärmebehandlung          | None                      | None                      |
+| Prozedur/Vers.file:      | Prozedur/Vers.file:      | None                      | None                      |
+
+| Norm         | Norm         | DIN EN ISO 6892-1   | DIN EN ISO 6892-1   | DIN EN ISO 6892-1   |
+|--------------|--------------|---------------------|---------------------|---------------------|
+| Prüfdatum    | Prüfdatum    | 2021-02-22 00:00:00 | 2021-02-22 00:00:00 | 2021-02-22 00:00:00 |
+| Prüfer       | Prüfer       | J.                  | J.                  | J.                  |
+| Prüfleitung  | Prüfleitung  | None                | None                | None                |
+| Datenfile(s) | Datenfile(s) | None                | None                | None                |
+| LIS-Datei    | LIS-Datei    | None                | None                | None                |
+
+| Bemerkungen   | Bemerkungen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   | In Walzrichtung aus Stahlblech entnommen   |
+|---------------|---------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|--------------------------------------------|
+
+| Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   | Umgebungsbedingungen   |
+|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|------------------------|
+
+| Überwachung von Raumtemp./-feuchte   |
+|--------------------------------------|
+
+| ja   | ja   |
+|------|------|
+
+| Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   | Prüfparameter   |
+|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|
+
+| Probenerwärmung     | Probenerwärmung     | -         | -         | -    |
+|---------------------|---------------------|-----------|-----------|------|
+| Dehngeschwindigkeit | Dehngeschwindigkeit | 0.00025   | 0.00025   | 1/s  |
+| Umschaltpunkt       | Umschaltpunkt       | 3,8 %     | 3,8 %     | None |
+| Weggeschwindigkeit  | Weggeschwindigkeit  | 0,02 mm/s | 0,02 mm/s | None |
+
+| Prüftemperatur   | Prüftemperatur   | RT   | RT   | RT   | °C   |
+|------------------|------------------|------|------|------|------|
+
+| verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   | verwendete Prüfmittel   |
+|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|-------------------------|
+
+| Prüfmaschine   | Prüfmaschine   | Instron 4505   | Instron 4505   |
+|----------------|----------------|----------------|----------------|
+
+| Kraftbereich   | Kraftbereich   | 100   | 100   | 100   | kN   |
+|----------------|----------------|-------|-------|-------|------|
+
+| Extensometer   | Extensometer   | HBM; Serien-Nr.: 28023/28024   | HBM; Serien-Nr.: 28023/28024   |
+|----------------|----------------|--------------------------------|--------------------------------|
+
+| Dehnungsbereich     | Dehnungsbereich     |   4 |   4 |   4 | %   |
+|---------------------|---------------------|-----|-----|-----|-----|
+| Nenngerätemesslänge | Nenngerätemesslänge |  50 |  50 |  50 | mm  |
+
+| Mikrometerschraube   | Mikrometerschraube   | Orion Satz 1 (Werkstatt)   | Orion Satz 1 (Werkstatt)   |
+|----------------------|----------------------|----------------------------|----------------------------|
+
+| Messschieber   | Messschieber   | Orion Satz 1, BA606983   | Orion Satz 1, BA606983   | Orion Satz 1, BA606983   |
+|----------------|----------------|--------------------------|--------------------------|--------------------------|
+
+| Thermoelemente Nr.   | Thermoelemente Nr.   | -                    | -                    | -                    | -                    | -                    | -                    | -                    | -                    | -                    |
+|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|
+| None                 | None                 | None                 | None                 | None                 | None                 | None                 | None                 | None                 | None                 | None                 |
+| vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart | vor dem Versuchstart |
+
+| Vorversuch Kraft max.   | Vorversuch Kraft max.   | -    | -    | kN   |
+|-------------------------|-------------------------|------|------|------|
+| Vorversuch E-Modul      | Vorversuch E-Modul      | -    | -    | GPa  |
+| Aufheizzeit bis PT      | Aufheizzeit bis PT      | -    | -    | min  |
+| Dehnungsanzeige RT      | Dehnungsanzeige RT      | None | None | %    |
+
+| Dehnung max.         |
+|----------------------|
+| Referenzwert E-Modul |
+| Durchwärmzeit bei PT |
+| Dehnungsanzeige PT   |
+
+| -   | -   | -   | %   |
+|-----|-----|-----|-----|
+| -   | -   | -   | GPa |
+| -   | -   | -   | min |
+| -   | -   | -   | %   |
+
+| Bemerkungen   | Bemerkungen   | Extensometer nach 3,9 % Dehnung der Proben entfernt.    | Extensometer nach 3,9 % Dehnung der Proben entfernt.    | Extensometer nach 3,9 % Dehnung der Proben entfernt.    | Extensometer nach 3,9 % Dehnung der Proben entfernt.    | Extensometer nach 3,9 % Dehnung der Proben entfernt.    | Extensometer nach 3,9 % Dehnung der Proben entfernt.    | Extensometer nach 3,9 % Dehnung der Proben entfernt.    | Extensometer nach 3,9 % Dehnung der Proben entfernt.    | Extensometer nach 3,9 % Dehnung der Proben entfernt.    |
+|---------------|---------------|---------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------|
+
+| Keine Erhöhung der Geschwindigkeit.   | Keine Erhöhung der Geschwindigkeit.   | Keine Erhöhung der Geschwindigkeit.   | Keine Erhöhung der Geschwindigkeit.   | Keine Erhöhung der Geschwindigkeit.   | Keine Erhöhung der Geschwindigkeit.   | Keine Erhöhung der Geschwindigkeit.   | Keine Erhöhung der Geschwindigkeit.   | Keine Erhöhung der Geschwindigkeit.   |
+|---------------------------------------|---------------------------------------|---------------------------------------|---------------------------------------|---------------------------------------|---------------------------------------|---------------------------------------|---------------------------------------|---------------------------------------|
+| None                                  | None                                  | None                                  | None                                  | None                                  | None                                  | None                                  | None                                  | None                                  |
+| None                                  | None                                  | None                                  | None                                  | None                                  | None                                  | None                                  | None                                  | None                                  |
+
+| J.     | J.     | J.     |
+|--------|--------|--------|
+| J.     | J.     | J.     |
+| J.     | J.     | J.     |
+| Prüfer | Prüfer | Prüfer |
+
+| R.          | R.          | R.          | R.          |
+|-------------|-------------|-------------|-------------|
+| R.          | R.          | R.          | R.          |
+| R.          | R.          | R.          | R.          |
+| Prüfleitung | Prüfleitung | Prüfleitung | Prüfleitung |
+{
+  "@id": "https://www.example.com/pruefprotokoll-zugversuch",
+  "@type": [
+    "http://example.org#HardnessTest"
+  ],
+  "http://www.w3.org/2000/01/rdf-schema#label": [
+    {
+      "@value": "Prüfprotokoll Zugversuch"
+    }
+  ],
+  "http://www.w3.org/2000/01/rdf-schema#comment": [
+    {
+      "@value": "Prüfprotokoll für Zugversuche"
+    }
+  ],
+  "http://example.org#orderNumber": [
+    {
+      "@value": "Proben - Nr."
+    }
+  ],
+  "http://example.org#input": [
+    {
+      "@id": "https://www.example.com/proben-1",
+      "@type": [
+        "http://example.org#Sample"
+      ],
+      "http://www.w3.org/2000/01/rdf-schema#label": [
+        {
+          "@value": "Zx1"
+        }
+      ],
+      "http://www.w3.org/2000/01/rdf-schema#comment": [
+        {
+          "@value": "S355"
+        }
+      ],
+      "http://example.org#sampleNumber": [
+        {
+          "@value": "Zx1"
+        }
+      ]
+    },
+    {
+      "@id": "https://www.example.com/proben-2",
+      "@type": [
+        "http://example.org#Sample"
+      ],
+      "http://www.w3.org/2000/01/rdf-schema#label": [
+        {
+          "@value": "Zx2 / Zx3 / Zx4"
+        }
+      ],
+      "http://www.w3.org/2000/01/rdf-schema#comment": [
+        {
+          "@value": "S355"
+        }
+      ],
+      "http://example.org#sampleNumber": [
+        {
+          "@value": "Zx2 / Zx3 / Zx4"
+        }
+      ]
+    }
+  ],
+  "http://example.org#displacementRate": {
+    "@type": [
+      "http://example.org#DisplacementRate"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "Dehngeschwindigkeit"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#comment": [
+      {
+        "@value": "0.00025 1/s"
+      }
+    ],
+    "http://example.org#value": [
+      {
+        "@value": "0.00025",
+        "@type": "http://www.w3.org/2001/XMLSchema#decimal"
+      }
+    ],
+    "http://example.org#unit": [
+      {
+        "@value": "1/s"
+      }
+    ]
+  }
+}
+STEP 1 — RAW EXTRACTION
+{
+  "@id": "https://www.example.com/pruefprotokoll-zugversuch",
+  "@type": [
+    "http://example.org#HardnessTest"
+  ],
+  "http://www.w3.org/2000/01/rdf-schema#label": [
+    {
+      "@value": "Prüfprotokoll Zugversuch"
+    }
+  ],
+  "http://www.w3.org/2000/01/rdf-schema#comment": [
+    {
+      "@value": "Prüfprotokoll für Zugversuche"
+    }
+  ],
+  "http://example.org#orderNumber": [
+    {
+      "@value": "Proben - Nr."
+    }
+  ],
+  "http://example.org#input": [
+    {
+      "@id": "https://www.example.com/proben-1",
+      "@type": [
+        "http://example.org#Sample"
+      ],
+      "http://www.w3.org/2000/01/rdf-schema#label": [
+        {
+          "@value": "Zx1"
+        }
+      ],
+      "http://www.w3.org/2000/01/rdf-schema#comment": [
+        {
+          "@value": "S355"
+        }
+      ],
+      "http://example.org#sampleNumber": [
+        {
+          "@value": "Zx1"
+        }
+      ]
+    },
+    {
+      "@id": "https://www.example.com/proben-2",
+      "@type": [
+        "http://example.org#Sample"
+      ],
+      "http://www.w3.org/2000/01/rdf-schema#label": [
+        {
+          "@value": "Zx2 / Zx3 / Zx4"
+        }
+      ],
+      "http://www.w3.org/2000/01/rdf-schema#comment": [
+        {
+          "@value": "S355"
+        }
+      ],
+      "http://example.org#sampleNumber": [
+        {
+          "@value": "Zx2 / Zx3 / Zx4"
+        }
+      ]
+    }
+  ],
+  "http://example.org#displacementRate": {
+    "@type": [
+      "http://example.org#DisplacementRate"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "Dehngeschwindigkeit"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#comment": [
+      {
+        "@value": "0.00025 1/s"
+      }
+    ],
+    "http://example.org#value": [
+      {
+        "@value": "0.00025",
+        "@type": "http://www.w3.org/2001/XMLSchema#decimal"
+      }
+    ],
+    "http://example.org#unit": [
+      {
+        "@value": "1/s"
+      }
+    ]
+  }
+}
+unit iri not found for: 1/s
+editing unit sting and trying again...
+new unit string: /s
+
+--- Turtle ---
+
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+@prefix ex: <http://test.example.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<https://www.example.com/pruefprotokoll-zugversuch> a ex:HardnessTest ;
+    rdfs:label "Prüfprotokoll Zugversuch" ;
+    dc:creator "LLM extraction" ;
+    dc:date "2026-01-22"^^xsd:date ;
+    ex:displacementRate <https://www.example.com/pruefprotokoll-zugversuch/displacementRate> ;
+    ex:input <https://www.example.com/proben-1>,
+        <https://www.example.com/proben-2> ;
+    ex:orderNumber "Proben - Nr." ;
+    rdfs:comment "Prüfprotokoll für Zugversuche" .
+
+<https://www.example.com/proben-1> a ex:Sample ;
+    rdfs:label "Zx1" ;
+    ex:sampleNumber "Zx1" ;
+    rdfs:comment "S355" .
+
+<https://www.example.com/proben-2> a ex:Sample ;
+    rdfs:label "Zx2 / Zx3 / Zx4" ;
+    ex:sampleNumber "Zx2 / Zx3 / Zx4" ;
+    rdfs:comment "S355" .
+
+<https://www.example.com/pruefprotokoll-zugversuch/displacementRate> a ex:DisplacementRate ;
+    rdfs:label "Dehngeschwindigkeit" ;
+    ex:unit <http://qudt.org/vocab/unit/NUM-PER-SEC> ;
+    ex:value 0.00025 ;
+    rdfs:comment "0.00025 1/s" .
+
+
+
+--- JSON-LD ---
+
+[
+  {
+    "@id": "https://www.example.com/proben-2",
+    "@type": [
+      "http://test.example.org/Sample"
+    ],
+    "http://test.example.org/sampleNumber": [
+      {
+        "@value": "Zx2 / Zx3 / Zx4"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#comment": [
+      {
+        "@value": "S355"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "Zx2 / Zx3 / Zx4"
+      }
+    ]
+  },
+  {
+    "@id": "https://www.example.com/pruefprotokoll-zugversuch",
+    "@type": [
+      "http://test.example.org/HardnessTest"
+    ],
+    "http://purl.org/dc/elements/1.1/creator": [
+      {
+        "@value": "LLM extraction"
+      }
+    ],
+    "http://purl.org/dc/elements/1.1/date": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#date",
+        "@value": "2026-01-22"
+      }
+    ],
+    "http://test.example.org/displacementRate": [
+      {
+        "@id": "https://www.example.com/pruefprotokoll-zugversuch/displacementRate"
+      }
+    ],
+    "http://test.example.org/input": [
+      {
+        "@id": "https://www.example.com/proben-1"
+      },
+      {
+        "@id": "https://www.example.com/proben-2"
+      }
+    ],
+    "http://test.example.org/orderNumber": [
+      {
+        "@value": "Proben - Nr."
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#comment": [
+      {
+        "@value": "Prüfprotokoll für Zugversuche"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "Prüfprotokoll Zugversuch"
+      }
+    ]
+  },
+  {
+    "@id": "https://www.example.com/pruefprotokoll-zugversuch/displacementRate",
+    "@type": [
+      "http://test.example.org/DisplacementRate"
+    ],
+    "http://test.example.org/unit": [
+      {
+        "@id": "http://qudt.org/vocab/unit/NUM-PER-SEC"
+      }
+    ],
+    "http://test.example.org/value": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#decimal",
+        "@value": "0.00025"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#comment": [
+      {
+        "@value": "0.00025 1/s"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "Dehngeschwindigkeit"
+      }
+    ]
+  },
+  {
+    "@id": "https://www.example.com/proben-1",
+    "@type": [
+      "http://test.example.org/Sample"
+    ],
+    "http://test.example.org/sampleNumber": [
+      {
+        "@value": "Zx1"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#comment": [
+      {
+        "@value": "S355"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "Zx1"
+      }
+    ]
+  }
+]
