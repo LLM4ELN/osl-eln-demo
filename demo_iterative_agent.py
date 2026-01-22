@@ -1,4 +1,3 @@
-from typing import Any, Union
 import uuid
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy
@@ -9,21 +8,21 @@ from langchain.agents.structured_output import ProviderStrategy
 # see also https://www.jujens.eu/posts/en/2025/Apr/26/pydantic-enums/
 from opensemantic.v1 import OswBaseModel
 from opensemantic.lab.v1 import LaboratoryProcess
-import opensemantic.core.v1
-import opensemantic.base.v1
-import opensemantic.lab.v1
+import opensemantic.core.v1  # noqa: F401 needed for eval
+import opensemantic.base.v1  # noqa: F401 needed for eval
+import opensemantic.lab.v1  # noqa: F401 needed for eval
 from pydantic import BaseModel
 
 from util import (
-    modify_schema, post_process_llm_json_response,
-    post_process_llm_json_response
+    modify_schema,
+    post_process_llm_json_response,
 )
 
 import json
 
-from llm_init import get_llm, llm
+from llm_init import get_llm
 from schema_catalog import lookup_exact_schema
-#from osl_init import osl_client
+# from osl_init import osl_client
 
 target_data_model = LaboratoryProcess
 
@@ -46,132 +45,6 @@ sys_prompt = (
 )
 
 
-
-# create a structured output agent with a provider strategy
-# based on the target data model's schema
-# preprocess the schema to comply
-# with https://platform.openai.com/docs/guides/structured-outputs#supported-schemas  # noqa: E501
-
-provider_strategy = ProviderStrategy(
-    schema=modify_schema(target_data_model.export_schema()),
-    strict=True
-)
-
-# create a tool that lookup a connected entity, return its IDs
-
-from langchain.tools import tool
-
-class KeyValuePair(BaseModel):
-    key: str
-    value: Union[str, int, float, bool, "KeyValuePair", list[Union[str, int, float, bool, "KeyValuePair"]]]
-
-class LookupOrCreateParamStructured(BaseModel):
-    # model_config = {
-    #     "json_schema_extra": {
-    #     "required": ["schema_id", "data"],
-    #     }
-    # }
-    schema_id: str
-    """ID of the schema to use for lookup / creation of the entity"""
-    data: list[KeyValuePair]
-    """serialized JSON data of the entity to lookup / create
-    e.g. [{"key": "title", "value": "Example Entity"}]
-    """
-
-arg_schema = {
-  "$defs": {
-    "KeyValuePair": {
-      "properties": {
-        "key": {
-          "title": "Key",
-          "type": "string"
-        },
-        "value": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "integer"
-            },
-            {
-              "type": "number"
-            },
-            {
-              "type": "boolean"
-            },
-            {
-              "$ref": "#/$defs/KeyValuePair",
-              "type": "object",
-              "additionalProperties": False
-            },
-            {
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "$ref": "#/$defs/KeyValuePair",
-                    "type": "object",
-                    "additionalProperties": False
-                  }
-                ]
-              },
-              "type": "array"
-            }
-          ],
-          "title": "Value"
-        }
-      },
-      "required": [
-        "key",
-        "value"
-      ],
-      "title": "KeyValuePair",
-      "type": "object"
-    }
-  },
-  "properties": {
-    "schema_id": {
-      "title": "Schema Id",
-      "type": "string"
-    },
-    "data": {
-      "items": {
-        "$ref": "#/$defs/KeyValuePair"
-      },
-      "title": "Data",
-      "type": "array"
-    }
-  },
-  "required": [
-    "schema_id"
-    "data"
-  ],
-  "title": "LookupOrCreateParam",
-  "type": "object"
-}
-
-@tool(args_schema=arg_schema)
-def lookup_or_create_entity_structured(schema_id: str, data: list[KeyValuePair]) -> str:
-    """lookup an entity by schema ID, description containing all available information
-    and structured data based on the description, or create it if not found.
-    return the entity's title / ID.
-    """
-    print("Lookup or create entity:", schema_id, data)
-    
-    return "Item:ExampleEntityID12345"
-
 class LookupOrCreateParam(BaseModel):
     property_name: str
     """name of the property for which the entity is being looked up / created.
@@ -187,8 +60,10 @@ class LookupOrCreateParam(BaseModel):
     containing all available information
     """
 
+
 entitites = {}
 entitity_requests = {}
+
 
 def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
     """lookup an entity by schema ID and description containing all available information,
@@ -201,16 +76,6 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
     entity_id = "Item:OSW" + entity_uuid.hex
     entitity_requests[entity_id] = param
     
-    # lookup the schema_name in the modules
-    # opensemantic.core, opensemantic.base, opensemantic.lab, ...
-    # schema_cls: OswBaseModel | None = None
-    # if hasattr(opensemantic.lab.v1, param.schema_name):
-    #     schema_cls = getattr(opensemantic.lab.v1, param.schema_name)
-    # elif hasattr(opensemantic.base.v1, param.schema_name):
-    #     schema_cls = getattr(opensemantic.base.v1, param.schema_name)
-    # elif hasattr(opensemantic.core.v1, param.schema_name):
-    #     schema_cls = getattr(opensemantic.core.v1, param.schema_name)
-    
     prompt = ""
     if param.schema_id != "":
         prompt = "The schema id is " + param.schema_id + ". "
@@ -220,15 +85,21 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
         prompt += "The entity it want to describe: " + param.entity_description + ". "
     schema_name = lookup_exact_schema(prompt)
     print(f"LLM returned class path: {schema_name}")
+
     # get the class from the path
     schema_cls: OswBaseModel = eval(schema_name)
     
     if schema_cls is None:
-        #raise ValueError(f"Schema name {param.schema_name} not found in opensemantic modules")
+        # raise ValueError(f"Schema name {param.schema_name} not found in opensemantic modules")
         print(f"Schema name {param.schema_name} not found in opensemantic modules")
         return None
     else:
         print(f"Found schema class for {param.schema_name}: {schema_cls}")
+        
+    # create a structured output agent with a provider strategy
+    # based on the target data model's schema
+    # preprocess the schema to comply
+    # with https://platform.openai.com/docs/guides/structured-outputs#supported-schemas  # noqa: E501
     
     try:
         # Fixme: schema contains "definitions" instead of "$defs"
@@ -237,10 +108,9 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
     except Exception as e:
         print(f"Error exporting schema for {param.schema_name}: {e}")
         return None
-    
+
     provider_strategy = ProviderStrategy(
         schema=target_schema,
-        #schema=modify_schema(json.loads(schema_cls.schema_json())),
         strict=True
     )
     
@@ -258,14 +128,14 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
     try:
         result = agent.invoke({
             "messages": [
-            {
-                "role": "system",
-                "content": sys_prompt
-            },
-            {
-                "role": "user",
-                "content": param.entity_description
-            }
+              {
+                  "role": "system",
+                  "content": sys_prompt
+              },
+              {
+                  "role": "user",
+                  "content": param.entity_description
+              }
             ]
         })
     except Exception as e:
@@ -287,6 +157,7 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
     
     entitites[data_instance.get_iri()] = data_instance
     return data_instance.get_iri()
+
 
 result = lookup_or_create_entity(
     LookupOrCreateParam(
