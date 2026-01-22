@@ -47,6 +47,10 @@ sys_prompt = (
 
 
 class LookupOrCreateParam(BaseModel):
+    parent_id: str
+    """OSW-ID, e.g. Item:OSWabcdef1234567890 of the parent entity
+    which is completed. Empty if not applicable.
+    """
     property_name: str
     """name of the property for which the entity is being looked up / created.
     Empty if not applicable.
@@ -72,7 +76,9 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
     return the entity's title / ID.
     """
     print((
-      f"Lookup or create entity for property '{param.property_name}', "
+      f"\n\n>> Lookup or create entity for "
+      f"parent entity '{param.parent_id}', "
+      f"property '{param.property_name}', "
       f"range '{param.schema_id}, {param.schema_name}' "
       f"based on description {param.entity_description}"
     ))
@@ -135,6 +141,28 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
         ],
     )
 
+    # prompt while providing previous requests (entitity_requests)
+    # to avoid duplicates
+    user_prompt = (
+        "For the parent entity with OSW-ID 'Item:OSW" + entity_uuid.hex + "'"
+        " create or lookup an linked entity "
+        "based on the following description:"
+        + ". \n------Description-------\n"
+        + param.entity_description
+        + ". \n-------------\n"
+        "In case you find a similar request below, you are obliged to reuse"
+        " its OSW-ID, e.g. Item:OSWabcdef1234567890 directly without calling "
+        "'lookup_or_create_entity'\n"
+        "------Previous requests-------\n"
+        + "\n".join(
+            f"OSW-ID: {osw_id} - Request for property '{r.property_name}', "
+            f"schema '{r.schema_id}, {r.schema_name}': {r.entity_description}"
+            for osw_id, r in entitity_requests.items()
+        )
+    )
+
+    print(f"Invoking agent for entity creation with prompt:\n{user_prompt}")
+
     try:
         result = agent.invoke({
             "messages": [
@@ -144,7 +172,7 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
               },
               {
                   "role": "user",
-                  "content": param.entity_description
+                  "content": user_prompt
               }
             ]
         })
@@ -171,6 +199,7 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
 
 result = lookup_or_create_entity(
     LookupOrCreateParam(
+        parent_id="",
         property_name="",
         schema_id="LaboratoryProcess",
         schema_name="LaboratoryProcess",
