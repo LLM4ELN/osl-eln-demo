@@ -15,3 +15,6 @@ wheels/
 # Automatically added by osw.auth.CredentialManager.save_credentials_to_file:
 osw_files/*
 */osw_files/*
+
+# ignore data files
+data/
