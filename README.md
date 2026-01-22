@@ -58,4 +58,11 @@ Lookup or suggest a data model based on a natural language description.
 python schema_catalog.py
 ```
 
+### Iterative Agent Example
+Run an agent that iteratively creates a LaboratoryProcess entry and linked entities (people, organizations, etc.) based on a natural language description.
+
+```bash
+python demo_iterative_agent.py
+```
+
 
