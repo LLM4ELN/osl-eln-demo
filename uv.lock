@@ -2053,6 +2053,7 @@ dependencies = [
     { name = "opensemantic-lab" },
     { name = "osw" },
     { name = "python-dotenv" },
+    { name = "rdflib" },
 ]
 
 [package.metadata]
@@ -2066,6 +2067,7 @@ requires-dist = [
     { name = "opensemantic-lab", specifier = ">=0.6.1.post2000" },
     { name = "osw", git = "https://github.com/OpenSemanticLab/osw-python" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
+    { name = "rdflib", specifier = ">=7.5.0" },
 ]
 
 [[package]]

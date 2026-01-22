@@ -55,7 +55,7 @@ for message in response["messages"]:
     if isinstance(message, AIMessage):
         print(">> got schema")
         schema = json.loads(message.content)
-
+        print(json.dumps(schema, indent=2))
 
 
 ### GET DATA

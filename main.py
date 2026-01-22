@@ -8,14 +8,17 @@ from langchain.agents.structured_output import ProviderStrategy
 from opensemantic.lab.v1 import LaboratoryProcess
 
 from util import (
-    modify_schema, post_process_llm_json_response,
-    post_process_llm_json_response
+    modify_schema,
+    post_process_llm_json_response,
+    post_process_llm_json_response,
 )
 
 import json
+from langchain_openai import ChatOpenAI
 
 from llm_init import llm
 from osl_init import osl_client
+
 
 target_data_model = LaboratoryProcess
 
@@ -40,21 +43,14 @@ sys_prompt = (
 # with https://platform.openai.com/docs/guides/structured-outputs#supported-schemas  # noqa: E501
 
 provider_strategy = ProviderStrategy(
-    schema=modify_schema(target_data_model.export_schema()),
-    strict=True
+    schema=modify_schema(target_data_model.export_schema()), strict=True
 )
 
-agent = create_agent(
-    model=llm,
-    response_format=provider_strategy
-)
+agent = create_agent(model=llm, response_format=provider_strategy)
 
-result = agent.invoke({
-    "messages": [{
-        "role": "user",
-        "content": sys_prompt + "\n\n" + prompt
-    }]
-})
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": sys_prompt + "\n\n" + prompt}]}
+)
 
 result = post_process_llm_json_response(result["structured_response"])
 
