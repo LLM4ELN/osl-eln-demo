@@ -7,6 +7,7 @@ from langchain.agents.structured_output import ProviderStrategy
 # => we use v1 models here
 # see also https://www.jujens.eu/posts/en/2025/Apr/26/pydantic-enums/
 from opensemantic.v1 import OswBaseModel
+from opensemantic.core.v1 import Entity
 from opensemantic.lab.v1 import LaboratoryProcess
 import opensemantic.core.v1  # noqa: F401 needed for eval
 import opensemantic.base.v1  # noqa: F401 needed for eval
@@ -22,7 +23,8 @@ import json
 
 from llm_init import get_llm
 from schema_catalog import lookup_exact_schema
-# from osl_init import osl_client
+from osw.core import OSW
+from osl_init import get_osl_client
 
 target_data_model = LaboratoryProcess
 
@@ -152,7 +154,8 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
         + ". \n-------------\n"
         "In case you find a similar request below, you are obliged to reuse"
         " its OSW-ID, e.g. Item:OSWabcdef1234567890 directly without calling "
-        "'lookup_or_create_entity'\n"
+        "'lookup_or_create_entity. Store this OSW-ID directly in the "
+        "corresponding property.'\n"
         "------Previous requests-------\n"
         + "\n".join(
             f"OSW-ID: {osw_id} - Request for property '{r.property_name}', "
@@ -217,3 +220,23 @@ for i, e in entitites.items():
     e: OswBaseModel
     print(f"#### {i} ({e.name}) ####")
     print(e.json(indent=2, exclude_none=True))
+
+
+# generate a short random id prefix
+id_prefix = uuid.uuid4().hex[:6]
+
+# prefix all entity names with the id_prefix to avoid name collisions
+for i, e in entitites.items():
+    e: Entity
+    if e.name is not None:
+        e.name = f"{id_prefix}_{e.name}"
+    if e.label is not None:
+        for lb in e.label:
+            lb.text = f"{id_prefix} {lb.text}"
+
+osl_client = get_osl_client()
+osl_client.store_entity(OSW.StoreEntityParam(
+    entities=list(entitites.values()),
+    overwrite=True,
+    change_id="demo_iterative_agent-0001",
+))
