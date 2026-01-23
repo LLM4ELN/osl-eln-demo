@@ -2,14 +2,18 @@ import json
 from langchain.agents import create_agent
 from os import environ
 from langchain.agents.structured_output import ProviderStrategy
-from langchain_core.tools import tool
+# from langchain_core.tools import tool
+from langchain.tools import tool
 from openai.types.responses import tool_choice_allowed
 from rdflib import Graph, URIRef
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
-from util import post_process_llm_json_response
 
+from util import (
+    modify_schema,
+    post_process_llm_json_response,
+)
 from docling.document_converter import DocumentConverter
 
 SOURCE = "data/02_secondary_data/results_protocols/Protokoll-Zugversuch RT Zx.xlsx"
@@ -376,21 +380,17 @@ schema = {
 
 ### GET DATA
 
-prompt = "Please extract data of this document."
+#prompt = "Please extract data of this document."
+prompt = "Please extract data from this document and use the 'search_unit' tool for any units (e.g., '1/s') you encounter."
 
 sys_prompt = (
-    "You are an expert laboratory assistant. "
-    "You always answer in valid JSON according to the provided schema. "
-    "If a field is not specified, leave it empty or null. "
-    "Do not add any additional fields that are not defined in the schema. "
-    "If you encounter a value which starts with http://qudt.org/vocab/unit/, "
-    "use the tool 'search_unit' to look up the value. "
+    "You are an expert laboratory assistant."
+    " Always use the 'search_unit' tool to look up QUDT unit IRIs for any units you encounter in your responses."
 )
-
 
 units = Graph().parse("unit.ttl")
 
-
+@tool
 def search_unit(query: str) -> str:
     """Get QUDT unit IRI for a given query."""
 
@@ -410,16 +410,25 @@ def search_unit(query: str) -> str:
     """
 
     result = units.query(query)
-
+    print(result)
     breakpoint()
 
     if len(result.bindings) > 0:
         return URIRef(result.bindings[0]["unit"])
 
+from opensemantic.lab.v1 import LaboratoryProcess
+
+target_data_model = LaboratoryProcess
+
+
 provider_strategy = ProviderStrategy(
-    schema=schema,
+    schema=modify_schema(target_data_model.export_schema()),
+    #schema=schema,
     strict=True,
 )
+
+
+
 
 agent = create_agent(
     model=llm,
@@ -427,26 +436,13 @@ agent = create_agent(
     response_format=provider_strategy,
 )
 
-result = agent.invoke(
-    {
-        "messages": [
-            {
+result = agent.invoke({
+    "messages": [
+        {
                 "role": "user",
                 "content": sys_prompt + "\n\n" + prompt,
             },
-            {
-                "role": "user",
-                "content": markdown_doc,
-            },
-        ]
-    },
-)
+    ]
+})
 
-
-result = post_process_llm_json_response(result["structured_response"])
-
-print("Structured Response:")
-print(json.dumps(result, indent=2))
-
-graph = Graph().parse(data=json.dumps(result), format="json-ld")
-graph.print(format="turtle")
+print("Agent Result:", result)
