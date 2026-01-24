@@ -24,7 +24,11 @@ import json
 from llm_init import get_llm
 from schema_catalog import lookup_exact_schema
 from osw.core import OSW
-from osl_init import get_osl_client
+from osl_init import (
+    build_vector_store,
+    get_osl_client,
+    lookup_excact_matching_entity,
+)
 
 target_data_model = LaboratoryProcess
 
@@ -70,6 +74,8 @@ class LookupOrCreateParam(BaseModel):
 
 entitites = {}
 entitity_requests = {}
+root = True
+vector_store = build_vector_store()
 
 
 def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
@@ -95,8 +101,18 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
     if param.schema_name != "":
         prompt += "The schema name is " + param.schema_name + ". "
     if param.entity_description != "":
-        prompt += "The entity it want to describe: "
+        prompt += "The entity I want to describe: "
         prompt += param.entity_description + ". "
+
+    existing_entity = lookup_excact_matching_entity(
+        vector_store=vector_store,
+        description=prompt,
+        llm_judge=True
+    )
+    if existing_entity is not None:
+        print(f"Found existing entity match: {existing_entity}")
+        return existing_entity
+
     schema_name = lookup_exact_schema(prompt)
     print(f"LLM returned class path: {schema_name}")
 
@@ -208,9 +224,9 @@ result = lookup_or_create_entity(
         schema_name="LaboratoryProcess",
         entity_description=(
             "A laboratory process to document an experiment "
-            "created by Dr. John Doe, Example Lab, "
-            "starting at 01.01.2025 and ending at 02.01.2025, "
-            "status in progress."
+            "created by Dr. Jane Doe, Example Lab, "
+            "starting at 05.02.2025 and ending at 06.02.2025, "
+            "status in finished."
         )
     )
 )
