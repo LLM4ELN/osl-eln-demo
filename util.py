@@ -229,6 +229,15 @@ def modify_schema(schema, seen_refs=None, root=None):
                 "uri", "uri-reference", "iri", "iri-reference"
             ]:
                 schema.pop("format")
+        
+        # cutoff subschemas if range annotation is present
+        if "range" in schema:
+            schema = {
+                "type": "string",
+                "range": schema["range"],
+                "title": schema.get("title", ""),
+                "description": schema.get("description", "")
+            }
 
     if root_level:
         # finally, remove $defs from root
@@ -255,6 +264,16 @@ def remove_nulls(d):
         return d
 
 
+def remove_empty_strings(d):
+    """Remove empty string values from nested dicts"""
+    if isinstance(d, dict):
+        return {k: remove_empty_strings(v) for k, v in d.items() if v != ""}
+    elif isinstance(d, list):
+        return [remove_empty_strings(i) for i in d if i != ""]
+    else:
+        return d
+
+
 def remove_auto_defined_fields(d):
     """Remove auto-defined fields like 'uuid' and 'type' from nested dicts"""
     auto_defined_fields = ["uuid", "type"]
@@ -271,7 +290,8 @@ def remove_auto_defined_fields(d):
 
 def post_process_llm_json_response(response_json):
     """Post-process LLM JSON response by
-    removing null values and auto-defined fields"""
+    removing null values, empty strings, and auto-defined fields"""
     cleaned_response = remove_nulls(response_json)
+    cleaned_response = remove_empty_strings(cleaned_response)
     cleaned_response = remove_auto_defined_fields(cleaned_response)
     return cleaned_response
