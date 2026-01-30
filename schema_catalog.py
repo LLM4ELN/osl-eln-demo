@@ -16,10 +16,11 @@ source_code += "\n\n##### opensemantic.lab.v1 #####\n\n"
 source_code += inspect.getsource(opensemantic.lab.v1._model)
 
 
-
-def get_data_schema_inventory_markdown(include_properties=True, include_property_def=True) -> str:
+def get_data_schema_inventory_markdown(
+    include_properties=True, include_property_def=True
+) -> str:
     """returns a markdown list of available data models in opensemantic"""
-    
+
     root_class = opensemantic.core.v1._model.Entity
 
     inventory = "# Available Data Models\n\n"
@@ -32,9 +33,12 @@ def get_data_schema_inventory_markdown(include_properties=True, include_property
             obj: type[opensemantic.core.v1._model.Entity]
             if inspect.isclass(obj) and issubclass(obj, root_class):
                 doc = obj.__doc__ or ""
-                inventory += f"## {module.__name__.replace('._model', '')}.{name}\n\n{doc}\n\n"
+                module_name = module.__name__.replace('._model', '')
+                inventory += f"## {module_name}.{name}\n\n{doc}\n\n"
                 for bc in obj.__bases__:
-                    inventory += f"- Inherits from: `{bc.__module__}.{bc.__name__}`\n".replace("._model", "")
+                    bc_path = f"{bc.__module__}.{bc.__name__}"
+                    bc_path = bc_path.replace("._model", "")
+                    inventory += f"- Inherits from: `{bc_path}`\n"
                 if not include_properties:
                     inventory += "\n"
                     continue
@@ -44,7 +48,9 @@ def get_data_schema_inventory_markdown(include_properties=True, include_property
                     for field_name, field_info in fields.items():
                         field_title = field_info.field_info.title or ""
                         field_desc = field_info.field_info.description or ""
-                        data_type = str(field_info.annotation).replace("typing.", "").replace("._model", "")
+                        data_type = str(field_info.annotation)
+                        data_type = data_type.replace("typing.", "")
+                        data_type = data_type.replace("._model", "")
                         # assembly <name>: <type> | <title> - <description>
                         inventory += f"- **{field_name}**: *{data_type}*"
                         if include_property_def:
@@ -55,6 +61,7 @@ def get_data_schema_inventory_markdown(include_properties=True, include_property
                         inventory += "\n"
                     inventory += "\n"
     return inventory
+
 
 source_markdown = get_data_schema_inventory_markdown()
 
@@ -67,7 +74,8 @@ def suggest_existing_or_new_schema(prompt: str) -> str:
             "system",
             "You are a helpful assistant called 'LLM4ELN'."
             "Your purpose is to help users of electronic lab notebook "
-            "to find the most suitable data model for their documentation task. "
+            "to find the most suitable data model for their "
+            "documentation task. "
             "If the existing data models are not sufficient, "
             "extend them by adding a new class."
             "Attached is the source code of data models you can choose from:"
@@ -94,7 +102,13 @@ def lookup_exact_schema(prompt: str) -> str:
 
     class SchemaResponse(BaseModel):
         # property with regex
-        module_path: str = Field(..., pattern=r"^opensemantic\.[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
+        module_path: str = Field(
+            ...,
+            pattern=(
+                r"^opensemantic\.[a-zA-Z_][a-zA-Z0-9_]*"
+                r"(\.[a-zA-Z_][a-zA-Z0-9_]*)*$"
+            )
+        )
         """Full import path to the schema class
         (e.g., 'opensemantic.core.v1.Entity')"""
         explanation: str
@@ -103,16 +117,22 @@ def lookup_exact_schema(prompt: str) -> str:
     system_prompt = (
         "You are a helpful assistant called 'LLM4ELN'. "
         "Your purpose is to help users of electronic lab notebooks "
-        "to find the most suitable data model for their documentation task. "
-        "Analyze the user's request and select the most appropriate data "
+        "to find the most suitable data model for their "
+        "documentation task. "
+        "Analyze the user's request and select the most "
+        "appropriate data "
         "model from the available schemas. "
-        "Reply only with a JSON object containing the fields `module_path` and `explanation`. "
-        "Return the exact full import path `module_path` to the Python class, "
+        "Reply only with a JSON object containing the fields "
+        "`module_path` and `explanation`. "
+        "Return the exact full import path `module_path` to the "
+        "Python class, "
         "e.g., 'opensemantic.<submodule>.v1.<classname>'. "
-        "Also provide a brief `explanation` of why this schema was chosen. "
-        "Available data models:\n\n" + get_data_schema_inventory_markdown(False, False)
+        "Also provide a brief `explanation` of why this schema was "
+        "chosen. "
+        "Available data models:\n\n"
+        + get_data_schema_inventory_markdown(False, False)
     )
-    
+
     llm = get_llm()
     if hasattr(llm, "reasoning_effort"):
         llm.reasoning_effort = "high"
@@ -147,11 +167,11 @@ def lookup_exact_schema(prompt: str) -> str:
 
 
 if __name__ == "__main__":
-    
+
     print("Data Schema Inventory:\n")
     inventory_md = get_data_schema_inventory_markdown()
     print(inventory_md)
-    
+
     prompt = (
         "I want to document a chemical synthesis of aspirin including the "
         "reagents, quantities, reaction conditions, and safety precautions."
