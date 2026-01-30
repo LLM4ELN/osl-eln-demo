@@ -1,6 +1,6 @@
 import uuid
 from langchain.agents import create_agent
-from langchain.agents.structured_output import ProviderStrategy
+from langchain.agents.structured_output import ProviderStrategy, ToolStrategy
 
 # note: pydantic v2 models currently cannot be initialized from JSON directly
 # + osw-python requires v1 models for now
@@ -12,7 +12,7 @@ from opensemantic.lab.v1 import LaboratoryProcess
 import opensemantic.core.v1  # noqa: F401 needed for eval
 import opensemantic.base.v1  # noqa: F401 needed for eval
 import opensemantic.lab.v1  # noqa: F401 needed for eval
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from util import (
     modify_schema,
@@ -21,53 +21,71 @@ from util import (
 
 import json
 
-from llm_init import get_llm
+from llm_init import get_llm, model_supports_structured_output
 from schema_catalog import lookup_exact_schema
-from osw.core import OSW
 from osl_init import (
     build_vector_store,
-    get_osl_client,
     lookup_excact_matching_entity,
 )
 
 target_data_model = LaboratoryProcess
 
-prompt = (
-    "Create a laboratory process entry."
-    "Author is Dr. John Doe, working at the Example Lab."
-    "starting at 01.01.2025 and ending at 02.01.2025."
-    "Status is in progress."
-)
+# prompt = (
+#     "Create a laboratory process entry."
+#     "Author is Dr. John Doe, working at the Example Lab Corp."
+#     "starting at 01.01.2025 and ending at 02.01.2025."
+#     "Status is in progress."
+# )
 
 sys_prompt = (
     "You are an expert laboratory assistant. "
     "You always answer in valid JSON according to the provided schema. "
+    "First ask yourself 'Which properties can I actually fill "
+    " with the given information without inventing data?'. "
     "If you do not have enough information to fill a field, "
     "leave it empty or null. "
-    "Do not add any additional fields that are not defined in the schema. "
-    "If you encounter a property that is annotated with a 'range', "
-    "use the tool 'lookup_or_create_entity' to "
-    "lookup or create the referenced entity."
-    "Store the returned ID (if not None) in the corresponding fields."
+    "Do not invent any new information that is not provided in the prompt. "
+    "Do not add any additional properties that are not defined in the schema. "
+    "If you encounter a property that is annotated in the schema with "
+    "a 'range', "
+    "e.g. \"range\": \"Category:OSW44deaa5b806d41a2a88594f562b110e9\" "
+    "and you have actual information about the entity that could be "
+    "linked there, "
+    "use the tool 'create_linked_entity' to "
+    "create the referenced entity "
+    "if (and only if) you have enough information. "
+    "Provide the name of the property that has the range, "
+    "the schema ID and name (if known)stored in the range, "
+    "the ID of the parent entity you are completing, "
+    "and all available information about the entity."
+    "Store the returned ID (or an empty or null value) in the "
+    "corresponding property."
+    "Store empty or null value directly without calling the tool "
+    "if you do not have enough information to create the entity. "
+    "Do not invent IDs on your own. "
+    "Do not create any placeholders or dummy values. "
+    "Do not call the tool twice with the same parameters."
+    "Do not use the tool for the root entity you are creating, only "
+    "for linked entities."
 )
 
 
-class LookupOrCreateParam(BaseModel):
-    parent_id: str
+class CreateParam(BaseModel):
+    parent_id: str = Field(..., min_length=1)
     """OSW-ID, e.g. Item:OSWabcdef1234567890 of the parent entity
     which is completed. Empty if not applicable.
     """
-    property_name: str
+    property_name: str = Field(..., min_length=1)
     """name of the property for which the entity is being looked up / created.
     Empty if not applicable.
     """
-    schema_id: str
-    """ID of the schema to use for lookup / creation of the entity
+    schema_id: str = Field(..., min_length=1)
+    """ID of the schema to use for creation of the entity
     e.g. 'Category:OSWabcdef1234567890'"""
     schema_name: str
-    """name of the schema to use for lookup / creation of the entity"""
-    entity_description: str
-    """textual description of the entity to lookup / create
+    """name of the schema to use for creation of the entity"""
+    entity_description: str = Field(..., min_length=1)
+    """textual description of the entity to create
     containing all available information
     """
 
@@ -78,10 +96,12 @@ root = True
 vector_store = build_vector_store()
 
 
-def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
-    """lookup an entity by schema ID and description
+def create_linked_entity(param: CreateParam) -> str | None:
+    """Create a linked entity stored in a property with 'range' annotation
+    based on the provided description
     containing all available information, or create it if not found.
-    return the entity's title / ID.
+    Returns the entity's OSW-ID to store in the corresponding property
+    of the parent object or None if the entity could not be created.
     """
     print((
       f"\n\n>> Lookup or create entity for "
@@ -104,14 +124,16 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
         prompt += "The entity I want to describe: "
         prompt += param.entity_description + ". "
 
-    existing_entity = lookup_excact_matching_entity(
-        vector_store=vector_store,
-        description=prompt,
-        llm_judge=True
-    )
-    if existing_entity is not None:
-        print(f"Found existing entity match: {existing_entity}")
-        return existing_entity
+    LOOKUP_FIRST = False
+    if LOOKUP_FIRST:
+        existing_entity = lookup_excact_matching_entity(
+            vector_store=vector_store,
+            description=prompt,
+            llm_judge=True
+        )
+        if existing_entity is not None:
+            print(f"Found existing entity match: {existing_entity}")
+            return existing_entity
 
     schema_name = lookup_exact_schema(prompt)
     print(f"LLM returned class path: {schema_name}")
@@ -138,24 +160,36 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
     try:
         # Fixme: schema contains "definitions" instead of "$defs"
         # but $refs are pointing to ""
-        target_schema = modify_schema(schema_cls.export_schema())
+        # target_schema = schema_cls
+        target_schema = schema_cls.export_schema()
+        target_schema = modify_schema(target_schema)
     except Exception as e:
         print(f"Error exporting schema for {param.schema_name}: {e}")
         return None
 
-    provider_strategy = ProviderStrategy(
-        schema=target_schema,
-        strict=True
-    )
-
     model = get_llm()
-    model.max_retries = 1
+
+    if model_supports_structured_output(model, tools=[create_linked_entity]):
+        # Model supports provider strategy - use it
+        effective_response_format = ProviderStrategy(
+            schema=target_schema,
+            strict=True
+        )
+    else:
+        # Model doesn't support provider strategy - use ToolStrategy
+        effective_response_format = ToolStrategy(
+            schema=target_schema
+        )
+
+    if hasattr(model, "max_retries"):
+        model.max_retries = 1
+    # model.temperature = 0.0 # not allowed for reasoning models
 
     agent = create_agent(
-        model=get_llm(),
-        response_format=provider_strategy,
+        model=model,
+        response_format=effective_response_format,
         tools=[
-            lookup_or_create_entity
+            create_linked_entity
         ],
     )
 
@@ -163,14 +197,14 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
     # to avoid duplicates
     user_prompt = (
         "For the parent entity with OSW-ID 'Item:OSW" + entity_uuid.hex + "'"
-        " create or lookup an linked entity "
+        " create a JSON Document "
         "based on the following description:"
         + ". \n------Description-------\n"
         + param.entity_description
         + ". \n-------------\n"
         "In case you find a similar request below, you are obliged to reuse"
         " its OSW-ID, e.g. Item:OSWabcdef1234567890 directly without calling "
-        "'lookup_or_create_entity. Store this OSW-ID directly in the "
+        "'create_linked_entity. Store this OSW-ID directly in the "
         "corresponding property.'\n"
         "------Previous requests-------\n"
         + "\n".join(
@@ -178,48 +212,87 @@ def lookup_or_create_entity(param: LookupOrCreateParam) -> str | None:
             f"schema '{r.schema_id}, {r.schema_name}': {r.entity_description}"
             for osw_id, r in entitity_requests.items()
         )
+        + "\n-------------\n\n"
+        "In case no similar request is found, create a new entity by "
+        "returning a JSON object according to the following schema:\n"
+        + json.dumps(target_schema, indent=2)
     )
 
-    print(f"Invoking agent for entity creation with prompt:\n{user_prompt}")
+    max_retries = 3
+    retry_count = 0
+    while retry_count < max_retries:
 
-    try:
-        result = agent.invoke({
-            "messages": [
-              {
-                  "role": "system",
-                  "content": sys_prompt
-              },
-              {
-                  "role": "user",
-                  "content": user_prompt
-              }
-            ]
-        })
-    except Exception as e:
-        print(f"Error invoking agent: {e}")
-        return None
+        print(
+            f"Invoking agent for entity creation with "
+            f"prompt:\n{user_prompt}"
+        )
 
-    result = post_process_llm_json_response(result["structured_response"])
-    result["uuid"] = str(entity_uuid)
+        try:
+            result = agent.invoke({
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": sys_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": user_prompt
+                    }
+                ]
+            })
+        except Exception as e:
+            print(f"Error invoking agent: {e}")
+            print(f"  Prompt was:\n{user_prompt}")
+            print(f"  Schema was:\n{target_schema}")
+            return None
 
-    print(f"Structured Response for {param.schema_name}:")
-    print(json.dumps(result, indent=2))
+        if "structured_response" not in result:
+            print(
+                f"Error: Agent result does not contain "
+                f"structured_response: {result}"
+            )
+            return None
+        result = post_process_llm_json_response(result["structured_response"])
+        result["uuid"] = str(entity_uuid)
 
-    # create an instance of the target data model from the result
-    try:
-        data_instance: OswBaseModel = schema_cls(**result)
-    except Exception as e:
-        print(f"Error creating data instance: {e}")
-        return None
+        print(f"Structured Response for {param.schema_name}:")
+        print(json.dumps(result, indent=2))
+
+        # create an instance of the target data model from the result
+        try:
+            data_instance: OswBaseModel = schema_cls(**result)
+            break
+        except Exception as e:
+            print(f"Error creating data instance: {e}")
+            user_prompt += (
+                f"\n\nThe previous response could not be parsed correctly: {e}"
+            )
+            retry_count += 1
+            if retry_count < max_retries:
+                print(f"Retrying... ({retry_count}/{max_retries})")
+            else:
+                print("Max retries reached, aborting.")
+                return None
+
+    if not LOOKUP_FIRST:
+        existing_entity = lookup_excact_matching_entity(
+            vector_store=vector_store,
+            description=data_instance.json(),
+            llm_judge=True
+        )
+        if existing_entity is not None:
+            print(f"Found existing entity match: {existing_entity}")
+            return existing_entity
 
     entitites[data_instance.get_iri()] = data_instance
+    print(f">> RETURN: {data_instance.get_iri()}")
     return data_instance.get_iri()
 
 
-result = lookup_or_create_entity(
-    LookupOrCreateParam(
-        parent_id="",
-        property_name="",
+result = create_linked_entity(
+    CreateParam(
+        parent_id="_root_",
+        property_name="_",
         schema_id="LaboratoryProcess",
         schema_name="LaboratoryProcess",
         entity_description=(
