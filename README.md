@@ -109,4 +109,14 @@ The following models were evaluated for the simple iterative approach:
 | vllm | microsoft/Phi-4-mini-instruct | ⚠️ Basic works, interactive not: model refuses tool calling |
 | vllm | microsoft/Phi-4-mini-reasoning | ⚠️ Basic works, interactive not: model refuses tool calling |
 
+### Advanced approach
+
+1. lookup the schema that matches the request
+2. Compare the request with previous requests stored in a global log via LLM judging. If a match is found, return the corresponding entity ID
+3. Else prompt a LLM to provide a list of properties that can actually be filled based on the user request
+4. remove all other properties from the schema
+5. use the modified schema to prompt a LLM to create the entity via structured output, handling properties with `range` annotation as strings containing the descriptions of the linked entities
+6. for each property with `range` annotation re-enter at step 1 with the description provided in step 4 to lookup / create the linked entity and the annotations of the corresponding property. Replace the textual description with the found / created entity ID.
+7. Compare the created entity with existing entities by using RAG + LLM judging. If a match is found, return the existing entity ID
+8. Store the created entity and return its ID
 
