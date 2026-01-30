@@ -6,6 +6,8 @@ import osw.model.entity as model
 from pydantic import BaseModel
 from langchain.agents import create_agent
 
+from llm_init import get_response_format
+
 load_dotenv()
 
 
@@ -156,7 +158,7 @@ def build_vector_store():
 
 
 def lookup_excact_matching_entity(
-    vector_store, description, llm_judge=False
+    vector_store, description, llm_judge=False, debug=False
 ) -> str | None:
     """lookup an entity by its description using the vector store
     and return the entity's title / ID if a good match is found.
@@ -166,16 +168,17 @@ def lookup_excact_matching_entity(
         description, k=5
     )
     print(f"\n\nLookup description: {description}")
-    for res, score in results:
-        print(
-            f"- Document ID: {res.id}, Score: {score}, "
-            f"Metadata: {res.metadata}"
-        )
+    if debug:
+        for res, score in results:
+            print(
+                f"- Document ID: {res.id}, Score: {score} \n"
+                f"  Metadata: {res.metadata}\n"
+                f"  Data: {res.page_content}\n"
+            )
 
     # if llm_judge is True, use LLM to judge the best match
     if llm_judge:
         from llm_init import get_llm
-        from langchain_core.prompts import PromptTemplate
 
         class ResultSchema(BaseModel):
             osw_id: str
@@ -184,41 +187,60 @@ def lookup_excact_matching_entity(
             explanation: str
             """explanation of the decision"""
 
-        prompt_template = (
-            "Given the following description of an entity:\n"
-            "{description}\n\n"
-            "And the following candidate entities with their metadata:\n"
-            "{candidates}\n\n"
-            "Check of one of the candidates matches the description "
-            "exactly.\n"
-            "If yes, select the best matching entity OSW-ID "
-            "(e.g. Item:OSW123..) or return 'None' if no good match "
-            "is found."
+        system_prompt = (
+            "Check if one of the candidate entities matches the given "
+            "description exactly by comparing all fields. "
+            "For free text fields, consider minor variations in wording "
+            "as matches. "
+            "Structured fields like ids, dates, enums, have to match "
+            "exactly. "
+            "Go over each candidate entity and compare its data to the "
+            "description. "
+            "Side by side compare each field and decide if it matches "
+            "the description. "
+            "If all match, return the matching entity's OSW-ID "
+            "(e.g. Item:OSW123..). "
+            "Return an empty OSW-ID if no good match was found."
+            "Respond in valid JSON according to the schema: "
+            "{'osw_id': str, 'explanation': str}"
         )
+
         candidates_str = "\n".join([
             f"- OSW-ID: {res.id}, Data: {res.page_content}"
             for res, score in results
         ])
-        prompt = PromptTemplate(
-            input_variables=["description", "candidates"],
-            template=prompt_template
+
+        user_prompt = (
+            f"Description of the entity:\n"
+            f"{description}\n\n"
+            f"Candidate entities with their metadata:\n"
+            f"{candidates_str}"
         )
 
+        llm = get_llm()
+        # if hasattr(llm, "reasoning_effort"):
+        #     llm.reasoning_effort = "high"
+
+        response_format = get_response_format(
+            llm, target_data_model=ResultSchema
+        )
         agent = create_agent(
-            model=get_llm(),
-            response_format=ResultSchema,
+            model=llm,
+            response_format=response_format,
         )
 
         response = agent.invoke({"messages": [
             {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
                 "role": "user",
-                "content": prompt.format(
-                    description=description,
-                    candidates=candidates_str
-                )
+                "content": user_prompt
             }
         ]})["structured_response"]
         print(f"LLM Judge Response: {response}")
+        response = ResultSchema.model_validate(response)
         if not response.osw_id.startswith("Item:OSW"):
             return None
         else:
@@ -268,9 +290,23 @@ if __name__ == "__main__":
         description=(
             "A laboratory process to document an experiment "
             "created by Dr. John Doe, Example Lab, "
-            "starting at 01.01.2025 and ending at 02.01.2025, "
+            # "starting at 01.01.2025 and ending at 02.01.2025, "
+            "starting 2025-01-01 and ending 2025-01-02, "
             "status in progress."
         ),
         llm_judge=True
     )
     print(f"Lookup result with LLM judge: {res2}")
+
+    res3 = lookup_excact_matching_entity(
+        vector_store=vector_store,
+        description=(
+            "A laboratory process to document an experiment "
+            "created by Dr. John Doe, Example Lab, "
+            # "starting at 01.03.2025 and ending at 02.03.2025, "
+            "starting 2025-03-01 and ending 2025-03-02, "
+            "status in progress."
+        ),
+        llm_judge=True
+    )
+    print(f"Lookup result with LLM judge: {res3}")
