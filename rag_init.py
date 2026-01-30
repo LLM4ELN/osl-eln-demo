@@ -10,15 +10,16 @@ def get_embedding():
     """initialize and return a new language model object
     based on environment variables"""
 
-    if environ.get("API_PROVIDER") == "azure":
+    if environ.get("EMBEDDING_API_PROVIDER") == "azure":
         # https://docs.langchain.com/oss/python/integrations/providers/microsoft
         from langchain_openai import AzureOpenAIEmbeddings
         embedding = AzureOpenAIEmbeddings(
             # or your deployment
-            azure_deployment=environ.get("API_EMBEDDING_MODEL"),
-            api_version=environ.get("API_VERSION"),  # or your api version
-            api_key=environ.get("API_KEY"),  # or your api key
-            azure_endpoint=environ.get("API_ENDPOINT")
+            azure_deployment=environ.get("EMBEDDING_API_MODEL"),
+            # or your api version
+            api_version=environ.get("EMBEDDING_API_VERSION"),
+            api_key=environ.get("EMBEDDING_API_KEY"),  # or your api key
+            azure_endpoint=environ.get("EMBEDDING_API_ENDPOINT")
         )
     return embedding
 
