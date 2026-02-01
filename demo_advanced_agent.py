@@ -1,3 +1,4 @@
+import time
 import uuid
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy, ToolStrategy
@@ -580,6 +581,8 @@ def create_linked_entity(param: CreateParam) -> str | None:
     return data_instance.get_iri()
 
 
+start_time = time.time()
+
 # Main execution
 result = create_linked_entity(
     CreateParam(
@@ -602,6 +605,9 @@ for i, e in entities.items():
     print(f"#### {i} ({e.name}) ####")
     print(e.json(indent=2, exclude_none=True))
 
+end_time = time.time()
+elapsed_time = end_time - start_time
+print(f"\nElapsed time: {elapsed_time:.2f} seconds")
 
 # Generate a short random id prefix
 id_prefix = uuid.uuid4().hex[:6]
