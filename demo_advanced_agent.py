@@ -18,6 +18,8 @@ from util import (
     modify_schema,
     post_process_llm_json_response,
     deep_copy,
+    remove_empty,
+    remove_nulls,
 )
 
 import json
@@ -434,9 +436,17 @@ def create_linked_entity(param: CreateParam) -> str | None:
 
     # Step 7: Compare with existing entities
     print("\n>> Comparing with existing entities in database...")
+    # description is the JSON representation of the instance
+    # with removed uuid and other non-informative fields
+    # and remove null/empty fields
+    data_instance_dict = json.loads(data_instance.json())
+    data_instance_dict.pop("uuid", None)
+    data_instance_dict = remove_empty(data_instance_dict)
+    data_instance_dict = remove_nulls(data_instance_dict)
+    data_instance_description = json.dumps(data_instance_dict)
     existing_entity = lookup_excact_matching_entity(
         vector_store=vector_store,
-        description=data_instance.json(),
+        description=data_instance_description,
         llm_judge=True
     )
     if existing_entity is not None:
