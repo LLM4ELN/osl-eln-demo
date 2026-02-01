@@ -25,7 +25,7 @@ from util import (
 import json
 
 from llm_init import get_llm, model_supports_structured_output
-from schema_catalog import lookup_exact_schema
+from schema_catalog import lookup_exact_schema, get_cached_inventory
 from osw.core import OSW
 from osl_init import (
     build_vector_store,
@@ -181,10 +181,35 @@ def extract_range_properties(schema: dict) -> dict:
     return range_props
 
 
+def _schemas_are_compatible(schema_id_1: str, schema_id_2: str) -> bool:
+    """Check if two schema IDs are compatible (same or have subclass relation).
+
+    Uses schema_id (e.g., 'Category:OSWxxx') not full paths.
+    Returns True if:
+    - They are the same schema
+    - One is a subclass of the other
+    """
+    if schema_id_1 == schema_id_2:
+        return True
+
+    inventory = get_cached_inventory()
+
+    # Use schema_id-based lookup for subclass checking
+    if inventory.is_subclass_of_by_schema_id(schema_id_1, schema_id_2):
+        return True
+    if inventory.is_subclass_of_by_schema_id(schema_id_2, schema_id_1):
+        return True
+
+    return False
+
+
 def compare_with_previous_requests(param: CreateParam, llm) -> str | None:
     """Step 2: Compare the request with previous requests stored in global log
     using LLM judging with structured output. Creates a single prompt for all
     comparisons to minimize latency.
+
+    Considers schemas compatible if they are the same or have a subclass
+    relationship.
     Returns entity ID if match found, None otherwise.
     """
     print("\n>> Comparing with previous requests using LLM judge...")
@@ -193,15 +218,15 @@ def compare_with_previous_requests(param: CreateParam, llm) -> str | None:
         print("No previous requests to compare")
         return None
 
-    # Filter to same schema only
+    # Filter to compatible schemas (same or subclass relation)
     relevant_requests = {
         entity_id: req
         for entity_id, req in entity_requests.items()
-        if req.schema_id == param.schema_id
+        if _schemas_are_compatible(req.schema_id, param.schema_id)
     }
 
     if not relevant_requests:
-        print("No previous requests with matching schema")
+        print("No previous requests with compatible schema")
         return None
 
     # Build comparison schema
