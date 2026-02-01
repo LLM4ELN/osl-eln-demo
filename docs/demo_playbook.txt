@@ -1,0 +1,55 @@
+Knowledge Graph Animation - Screenplay
+
+Initial state: Gray input node with user text for Chapter 1
+
+Chapter 1: Experiment #1
+[initial] Gray input node: "A tensile test experiment #1 conducted by Dr. Jane Doe, Example Lab Corp."
++ new Node e (extracting from input), dashed edge from input1 to e (no label), edge "type" from e to eC (new class node "LaboratoryProcess")
++ new Node p "Dr. Jane Doe, Example Lab Corp." while e text changes to "A tensile test experiment #1", edge "actionee" from e to p
++ new Node pC "Person" (class), edge "type" from p to pC
++ new Node o "Example Lab Corp." while p text changes to "Dr. Jane Doe", edge "organization" from p to o
++ new Node oC "Organization" (class), edge "type" from o to oC
+
+[pause]
+
+Chapter 2: Experiment #2
++ Gray input node: "A tensile test experiment #2 conducted by Dr. John Doe, Example Lab Corp."
++ new Node e2 (extracting from input), dashed edge from input2 to e2 (no label), edge "type" from e2 to eC
++ new Node p2 "Dr. John Doe, Example Lab Corp." while e2 text changes to "A tensile test experiment #2", edge "actionee" from e2 to p2, edge "type" from p2 to pC
++ new Node o2 "Example Lab Corp." while p2 text changes to "Dr. John Doe", edge "organization" from p2 to o2, edge "type" from o2 to oC
++ edge from o2 to o "sameAs"
++ o2 merges into o while removing edge "sameAs" (identified as same organization)
+
+[pause]
+
+Chapter 3: Experiment #3
++ Gray input node: "A tensile test experiment #3 conducted by Dr. John Doe, Manager of Example Lab Corp."
++ new Node e3 (extracting from input), dashed edge from input3 to e3 (no label), edge "type" from e3 to eC
++ new Node p3 "Dr. John Doe, Manager of Example Lab Corp." while e3 text changes to "A tensile test experiment #3", edge "actionee" from e3 to p3, edge "type" from p3 to pC
++ edge from p3 to p2 "sameAs"
++ p3 merges into p2 while removing edge "sameAs" (identified as same person)
++ p2 label updated to "Dr. John Doe", edge "manager" from o to p2, o marked as "modified" (yellow border)
++ e3 and o marked as "stored" (black border)
+
+[complete]
+
+---
+
+Node Types:
+- Gray (#999): Input node (user text in quotes)
+- Green (#69b3a2): Instance node (extracted entity)
+- Pink (#ff9999): Class node (type classification)
+
+Implementation Requirements:
+- Initial state shows the first input node (gray), not an empty graph
+- Each chapter starts with a gray input node showing the user text in quotes
+- Input nodes remain visible and are linked to experiment nodes via dashed edges (no labels)
+- Transitions within each step run in parallel
+- Auto-start GIF recording on page load
+- "Restart Animation" button to reset and restart (works even during animation)
+- "Record GIF" button to record and download as GIF
+- Panning and zooming possible during animation
+- Speed slider (0.25x to 3x) to adjust animation speed
+- Chapter pauses between experiments for visual separation
+- Animation generation tracking ensures clean restarts without leftover state
+- Sequence is defined as importable data structure (not hardcoded)

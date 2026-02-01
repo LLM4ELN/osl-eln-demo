@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animated Knowledge Graph - Cytoscape.js</title>
+    <script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        #graph {
+            width: 100%;
+            height: 90vh;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+        #controls {
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #status {
+            display: inline-block;
+            margin-left: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <button id="restartBtn" onclick="restartAnimation()">Restart Animation</button>
+        <button id="downloadBtn" onclick="downloadGIF()">Record GIF</button>
+        <label style="margin-left: 20px;">Speed: <input type="range" id="speedSlider" min="0.25" max="3" step="0.25" value="1" onchange="updateSpeed(this.value)"><span id="speedValue">1x</span></label>
+        <span id="status">Ready to start</span>
+    </div>
+    <div id="graph"></div>
+
+    <script>
+        const container = document.getElementById('graph');
+        const width = container.offsetWidth || window.innerWidth - 40;
+        const height = container.offsetHeight || window.innerHeight * 0.9;
+
+        let cy = null;
+        let isAnimating = false;
+        let animationGeneration = 0;
+
+        // Global speed multiplier
+        let speedMultiplier = 1;
+
+        const BASE_TIMINGS = {
+            stepDelay: 1500,
+            pauseDelay: 2000,
+            transitionDuration: 500,
+            mergeDuration: 1000,
+            bgTransition: 300
+        };
+
+        function getTime(key) {
+            return BASE_TIMINGS[key] / speedMultiplier;
+        }
+
+        function updateSpeed(value) {
+            speedMultiplier = parseFloat(value);
+            document.getElementById('speedValue').textContent = value + 'x';
+        }
+
+        // Initialize Cytoscape
+        function initCytoscape() {
+            cy = cytoscape({
+                container: container,
+                elements: [],
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'background-color': '#69b3a2',
+                            'label': 'data(label)',
+                            'text-wrap': 'wrap',
+                            'text-max-width': '120px',
+                            'font-size': '12px',
+                            'text-valign': 'bottom',
+                            'text-halign': 'center',
+                            'text-margin-y': '5px',
+                            'border-width': 2,
+                            'border-color': '#333',
+                            'width': 40,
+                            'height': 40
+                        }
+                    },
+                    {
+                        selector: 'node.class-node',
+                        style: {
+                            'background-color': '#ff9999'
+                        }
+                    },
+                    {
+                        selector: 'node.input-node',
+                        style: {
+                            'background-color': '#999999'
+                        }
+                    },
+                    {
+                        selector: 'node.state-new',
+                        style: {
+                            'border-color': '#ff0000',
+                            'border-width': 3
+                        }
+                    },
+                    {
+                        selector: 'node.state-modified',
+                        style: {
+                            'border-color': '#ffcc00',
+                            'border-width': 3
+                        }
+                    },
+                    {
+                        selector: 'node.state-stored',
+                        style: {
+                            'border-color': '#333',
+                            'border-width': 2
+                        }
+                    },
+                    {
+                        selector: 'edge',
+                        style: {
+                            'width': 2,
+                            'line-color': '#999',
+                            'target-arrow-color': '#999',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier',
+                            'label': 'data(label)',
+                            'font-size': '10px',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': '-10px'
+                        }
+                    },
+                    {
+                        selector: 'edge.dashed',
+                        style: {
+                            'line-style': 'dashed'
+                        }
+                    }
+                ],
+                layout: {
+                    name: 'cose',
+                    animate: 'end',
+                    animationDuration: 2000,
+                    animationEasing: 'ease-in-out',
+                    randomize: false,
+                    nodeRepulsion: 400000,
+                    idealEdgeLength: 150,
+                    edgeElasticity: 100,
+                    nestingFactor: 5,
+                    gravity: 80,
+                    numIter: 300,
+                    refresh: 30
+                },
+                userZoomingEnabled: true,
+                userPanningEnabled: true,
+                boxSelectionEnabled: false
+            });
+        }
+
+        initCytoscape();
+
+        // Animation sequence
+        const sequence = [
+            {
+                actions: [{
+                    action: "addNode",
+                    id: "input1",
+                    label: '"A tensile test experiment #1 conducted by Dr. Jane Doe, Example Lab Corp."',
+                    type: "input"
+                }],
+                status: "User input for Experiment #1..."
+            },
+            {
+                actions: [{ action: "pause" }],
+                status: "Processing input..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "e",
+                        label: "A tensile test experiment #1 conducted by Dr. Jane Doe, Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "input1",
+                        target: "e",
+                        label: "",
+                        dashed: true
+                    }
+                ],
+                status: "Extracting experiment entity..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "eC",
+                        label: "LaboratoryProcess",
+                        type: "class"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "e",
+                        target: "eC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding LaboratoryProcess class and connecting..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "p",
+                        label: "Dr. Jane Doe, Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "updateNode",
+                        id: "e",
+                        label: "A tensile test experiment #1"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "e",
+                        target: "p",
+                        label: "actionee"
+                    }
+                ],
+                status: "Adding person and refining relationships..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "pC",
+                        label: "Person",
+                        type: "class"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "p",
+                        target: "pC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding Person class and connecting..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "o",
+                        label: "Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "updateNode",
+                        id: "p",
+                        label: "Dr. Jane Doe"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "p",
+                        target: "o",
+                        label: "organization"
+                    }
+                ],
+                status: "Adding organization and refining relationships..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "oC",
+                        label: "Organization",
+                        type: "class"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "o",
+                        target: "oC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding Organization class and connecting..."
+            },
+            {
+                actions: [
+                    {
+                        action: "updateNodeState",
+                        nodeIds: ["e", "p", "o"],
+                        state: "stored"
+                    },
+                    { action: "pause" }
+                ],
+                status: "--- Starting Experiment #2 ---"
+            },
+            {
+                actions: [{
+                    action: "addNode",
+                    id: "input2",
+                    label: '"A tensile test experiment #2 conducted by Dr. John Doe, Example Lab Corp."',
+                    type: "input"
+                }],
+                status: "User input for Experiment #2..."
+            },
+            {
+                actions: [{ action: "pause" }],
+                status: "Processing input..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "e2",
+                        label: "A tensile test experiment #2 conducted by Dr. John Doe, Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "e2",
+                        target: "eC",
+                        label: "type"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "input2",
+                        target: "e2",
+                        label: "",
+                        dashed: true
+                    }
+                ],
+                status: "Extracting experiment entity and connecting to class..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "p2",
+                        label: "Dr. John Doe, Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "updateNode",
+                        id: "e2",
+                        label: "A tensile test experiment #2"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "e2",
+                        target: "p2",
+                        label: "actionee"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "p2",
+                        target: "pC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding second person and connecting relationships..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "o2",
+                        label: "Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "updateNode",
+                        id: "p2",
+                        label: "Dr. John Doe"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "p2",
+                        target: "o2",
+                        label: "organization"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "o2",
+                        target: "oC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding second organization and connecting relationships..."
+            },
+            {
+                actions: [{
+                    action: "addEdge",
+                    source: "o2",
+                    target: "o",
+                    label: "sameAs"
+                }],
+                status: "Identifying organizations as the same..."
+            },
+            {
+                actions: [{
+                    action: "mergeNodes",
+                    sourceId: "o2",
+                    targetId: "o"
+                }],
+                status: "Merging duplicate organizations..."
+            },
+            {
+                actions: [
+                    {
+                        action: "updateNodeState",
+                        nodeIds: ["e2", "p2"],
+                        state: "stored"
+                    },
+                    { action: "pause" }
+                ],
+                status: "--- Starting Experiment #3 ---"
+            },
+            {
+                actions: [{
+                    action: "addNode",
+                    id: "input3",
+                    label: '"A tensile test experiment #3 conducted by Dr. John Doe, Manager of Example Lab Corp."',
+                    type: "input"
+                }],
+                status: "User input for Experiment #3..."
+            },
+            {
+                actions: [{ action: "pause" }],
+                status: "Processing input..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "e3",
+                        label: "A tensile test experiment #3 conducted by Dr. John Doe, Manager of Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "e3",
+                        target: "eC",
+                        label: "type"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "input3",
+                        target: "e3",
+                        label: "",
+                        dashed: true
+                    }
+                ],
+                status: "Extracting experiment entity and connecting to class..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "p3",
+                        label: "Dr. John Doe, Manager of Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "updateNode",
+                        id: "e3",
+                        label: "A tensile test experiment #3"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "e3",
+                        target: "p3",
+                        label: "actionee"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "p3",
+                        target: "pC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding third person and connecting relationships..."
+            },
+            {
+                actions: [{
+                    action: "addEdge",
+                    source: "p3",
+                    target: "p2",
+                    label: "sameAs"
+                }],
+                status: "Identifying persons as the same..."
+            },
+            {
+                actions: [{
+                    action: "mergeNodes",
+                    sourceId: "p3",
+                    targetId: "p2"
+                }],
+                status: "Merging duplicate persons..."
+            },
+            {
+                actions: [
+                    {
+                        action: "updateNode",
+                        id: "p2",
+                        label: "Dr. John Doe"
+                    },
+                    {
+                        action: "addEdge",
+                        source: "o",
+                        target: "p2",
+                        label: "manager"
+                    },
+                    {
+                        action: "updateNodeState",
+                        nodeIds: ["o"],
+                        state: "modified"
+                    }
+                ],
+                status: "Recognizing organization and adding manager relationship..."
+            },
+            {
+                actions: [
+                    {
+                        action: "updateNodeState",
+                        nodeIds: ["e3", "o"],
+                        state: "stored"
+                    },
+                    { action: "complete" }
+                ],
+                status: "Animation complete!"
+            }
+        ];
+
+        function runLayout() {
+            // Use explicit position animation for smoother, visible settling
+            const layout = cy.layout({
+                name: 'cose',
+                animate: false, // Calculate positions first
+                nodeRepulsion: 400000,
+                idealEdgeLength: 150,
+                edgeElasticity: 100,
+                nestingFactor: 5,
+                gravity: 80,
+                numIter: 500,
+                fit: false,
+                padding: 50
+            });
+
+            // Store current positions before layout
+            const startPositions = {};
+            cy.nodes().forEach(node => {
+                startPositions[node.id()] = { ...node.position() };
+            });
+
+            layout.run();
+
+            // Get calculated end positions
+            const endPositions = {};
+            cy.nodes().forEach(node => {
+                endPositions[node.id()] = { ...node.position() };
+            });
+
+            // Reset to start positions
+            cy.nodes().forEach(node => {
+                if (startPositions[node.id()]) {
+                    node.position(startPositions[node.id()]);
+                }
+            });
+
+            // Animate to end positions with explicit duration
+            const animDuration = 1200 / speedMultiplier;
+            cy.nodes().forEach(node => {
+                if (endPositions[node.id()]) {
+                    node.animate({
+                        position: endPositions[node.id()]
+                    }, {
+                        duration: animDuration,
+                        easing: 'ease-out-cubic'
+                    });
+                }
+            });
+
+            // Fit view after animation completes
+            setTimeout(() => {
+                cy.fit(50);
+            }, animDuration + 50);
+        }
+
+        async function executeStep(step, generation) {
+            if (generation !== animationGeneration) return;
+
+            const stepData = sequence[step];
+            document.getElementById("status").textContent = stepData.status;
+
+            for (const actionData of stepData.actions) {
+                if (generation !== animationGeneration) return;
+
+                switch (actionData.action) {
+                    case "addNode":
+                        let nodeClasses = '';
+                        const initialState = actionData.state || (actionData.type === 'instance' ? 'new' : 'stored');
+                        if (actionData.type === 'class') nodeClasses = 'class-node';
+                        else if (actionData.type === 'input') nodeClasses = 'input-node';
+                        nodeClasses += ' state-' + initialState;
+                        cy.add({
+                            group: 'nodes',
+                            data: {
+                                id: actionData.id,
+                                label: actionData.label,
+                                nodeType: actionData.type,
+                                nodeState: initialState
+                            },
+                            classes: nodeClasses.trim()
+                        });
+                        break;
+
+                    case "removeNode":
+                        cy.getElementById(actionData.id).remove();
+                        break;
+
+                    case "addEdge":
+                        cy.add({
+                            group: 'edges',
+                            data: {
+                                id: `${actionData.source}-${actionData.target}-${actionData.label || 'dashed'}`,
+                                source: actionData.source,
+                                target: actionData.target,
+                                label: actionData.label
+                            },
+                            classes: actionData.dashed ? 'dashed' : ''
+                        });
+                        break;
+
+                    case "updateNode":
+                        const nodeToUpdate = cy.getElementById(actionData.id);
+                        if (nodeToUpdate.length) {
+                            if (actionData.label !== undefined) nodeToUpdate.data('label', actionData.label);
+                            if (actionData.state !== undefined) {
+                                nodeToUpdate.data('nodeState', actionData.state);
+                                nodeToUpdate.removeClass('state-new state-modified state-stored');
+                                nodeToUpdate.addClass('state-' + actionData.state);
+                            }
+                        }
+                        break;
+
+                    case "updateNodeState":
+                        // Update state of multiple nodes at once
+                        const nodeIds = actionData.nodeIds || [];
+                        const newState = actionData.state;
+                        nodeIds.forEach(nodeId => {
+                            const n = cy.getElementById(nodeId);
+                            if (n.length) {
+                                n.data('nodeState', newState);
+                                n.removeClass('state-new state-modified state-stored');
+                                n.addClass('state-' + newState);
+                            }
+                        });
+                        break;
+
+                    case "mergeNodes":
+                        const sourceNode = cy.getElementById(actionData.sourceId);
+                        const targetNode = cy.getElementById(actionData.targetId);
+
+                        if (sourceNode.length && targetNode.length) {
+                            // Animate source moving to target
+                            sourceNode.animate({
+                                position: targetNode.position(),
+                                style: { opacity: 0 }
+                            }, {
+                                duration: getTime('mergeDuration')
+                            });
+
+                            await new Promise(resolve => setTimeout(resolve, getTime('mergeDuration')));
+                            if (generation !== animationGeneration) return;
+
+                            // Redirect edges from source to target
+                            sourceNode.connectedEdges().forEach(edge => {
+                                const edgeData = edge.data();
+                                const newSource = edgeData.source === actionData.sourceId ? actionData.targetId : edgeData.source;
+                                const newTarget = edgeData.target === actionData.sourceId ? actionData.targetId : edgeData.target;
+
+                                // Skip if it would create a self-loop or sameAs edge
+                                if (newSource !== newTarget && !(edgeData.label === 'sameAs' &&
+                                    ((newSource === actionData.targetId && newTarget === actionData.sourceId) ||
+                                     (newSource === actionData.sourceId && newTarget === actionData.targetId)))) {
+                                    // Check if duplicate edge already exists
+                                    const existingEdge = cy.edges().filter(e =>
+                                        e.data('source') === newSource &&
+                                        e.data('target') === newTarget &&
+                                        e.data('label') === edgeData.label
+                                    );
+                                    if (existingEdge.length === 0) {
+                                        cy.add({
+                                            group: 'edges',
+                                            data: {
+                                                id: `${newSource}-${newTarget}-${edgeData.label}-merged`,
+                                                source: newSource,
+                                                target: newTarget,
+                                                label: edgeData.label
+                                            }
+                                        });
+                                    }
+                                }
+                            });
+
+                            // Remove source node and its edges
+                            sourceNode.remove();
+                        }
+                        break;
+
+                    case "pause":
+                        await new Promise(resolve => setTimeout(resolve, getTime('pauseDelay')));
+                        if (generation !== animationGeneration) return;
+                        break;
+
+                    case "complete":
+                        isAnimating = false;
+                        return;
+                }
+            }
+
+            if (generation !== animationGeneration) return;
+
+            runLayout();
+
+            await new Promise(resolve => setTimeout(resolve, getTime('stepDelay')));
+
+            if (step < sequence.length - 1 && isAnimating && generation === animationGeneration) {
+                executeStep(step + 1, generation);
+            }
+        }
+
+        // Setup initial state from sequence (step 0 defines the initial input node)
+        function setupInitialState() {
+            const initialStep = sequence[0];
+            for (const actionData of initialStep.actions) {
+                if (actionData.action === "addNode") {
+                    cy.add({
+                        group: 'nodes',
+                        data: {
+                            id: actionData.id,
+                            label: actionData.label
+                        },
+                        classes: actionData.type === 'class' ? 'class-node' : actionData.type === 'input' ? 'input-node' : ''
+                    });
+                }
+            }
+            document.getElementById("status").textContent = initialStep.status;
+            runLayout();
+        }
+
+        async function restartAnimation() {
+            animationGeneration++;
+            const currentGeneration = animationGeneration;
+            isAnimating = false;
+
+            cy.elements().remove();
+
+            // Setup initial state from sequence
+            setupInitialState();
+
+            cy.reset();
+
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            if (currentGeneration === animationGeneration) {
+                isAnimating = true;
+                // Start from step 1 (step 0 is the initial state already shown)
+                executeStep(1, currentGeneration);
+            }
+        }
+
+        async function downloadGIF() {
+            try {
+                document.getElementById("status").textContent = "Preparing GIF recording...";
+
+                animationGeneration++;
+                const currentGeneration = animationGeneration;
+                isAnimating = false;
+
+                cy.elements().remove();
+
+                // Setup initial state from sequence
+                setupInitialState();
+
+                cy.reset();
+
+                await new Promise(resolve => setTimeout(resolve, 200));
+                if (currentGeneration !== animationGeneration) return;
+
+                const gif = new GIF({
+                    workers: 2,
+                    quality: 5,
+                    width: width,
+                    height: height,
+                    workerScript: 'gif.worker.js',
+                    background: '#ffffff'
+                });
+
+                const frames = [];
+
+                const captureFrame = () => {
+                    return new Promise((resolve, reject) => {
+                        try {
+                            const png = cy.png({ full: false, scale: 1, bg: 'white' });
+                            const canvas = document.createElement('canvas');
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+
+                            const img = new Image();
+                            img.onload = () => {
+                                ctx.fillStyle = 'white';
+                                ctx.fillRect(0, 0, width, height);
+                                ctx.drawImage(img, 0, 0, width, height);
+                                resolve(ctx);
+                            };
+                            img.onerror = reject;
+                            img.src = png;
+                        } catch (err) {
+                            reject(err);
+                        }
+                    });
+                };
+
+                gif.on('finished', (blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'knowledge-graph-cytoscape.gif';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(url), 100);
+                    document.getElementById("status").textContent = "GIF downloaded!";
+                });
+
+                gif.on('progress', (p) => {
+                    document.getElementById("status").textContent = `Rendering GIF... ${Math.round(p * 100)}%`;
+                });
+
+                isAnimating = true;
+                let frameCount = 0;
+                const frameInterval = 150;
+
+                const captureLoop = setInterval(async () => {
+                    try {
+                        if (currentGeneration !== animationGeneration) {
+                            clearInterval(captureLoop);
+                            return;
+                        }
+
+                        if (!isAnimating) {
+                            clearInterval(captureLoop);
+
+                            for (let i = 0; i < 10; i++) {
+                                if (currentGeneration !== animationGeneration) return;
+                                const finalFrame = await captureFrame();
+                                frames.push(finalFrame);
+                            }
+
+                            document.getElementById("status").textContent = `Rendering ${frames.length} frames into GIF...`;
+
+                            for (let i = 0; i < frames.length; i++) {
+                                gif.addFrame(frames[i], { delay: frameInterval });
+                            }
+
+                            gif.render();
+                            return;
+                        }
+
+                        const frame = await captureFrame();
+                        frames.push(frame);
+                        document.getElementById("status").textContent = `Recording... ${frameCount + 1} frames`;
+                        frameCount++;
+                    } catch (err) {
+                        console.error('Frame capture error:', err);
+                    }
+                }, frameInterval);
+
+                // Start from step 1 (step 0 is the initial state already shown)
+                executeStep(1, currentGeneration);
+
+            } catch (err) {
+                console.error('GIF recording error:', err);
+                document.getElementById("status").textContent = "GIF recording failed: " + err.message;
+            }
+        }
+
+        // Auto-start animation on page load
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                restartAnimation();
+            }, 500);
+        });
+    </script>
+</body>
+</html>
