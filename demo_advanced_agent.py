@@ -57,17 +57,17 @@ class CreateParam(BaseModel):
 
 
 class ComparisonResult(BaseModel):
-    """Result of comparing two entity requests"""
-    is_same_entity: bool = Field(
-        ...,
+    """Result of comparing a new request against multiple previous requests"""
+    matching_entity_id: str = Field(
+        default="",
         description=(
-            "True if both requests describe the same entity, "
-            "False otherwise"
+            "Entity ID if match found (e.g. 'Item:OSW...'), "
+            "empty string if no match"
         )
     )
     reasoning: str = Field(
         ...,
-        description="Brief explanation of why they are the same or different"
+        description="Brief explanation of the decision"
     )
 
 
@@ -181,19 +181,114 @@ def extract_range_properties(schema: dict) -> dict:
     return range_props
 
 
-def compare_with_previous_requests(param: CreateParam) -> str | None:
-    """Step 2: Compare the request with previous requests stored in global log.
+def compare_with_previous_requests(param: CreateParam, llm) -> str | None:
+    """Step 2: Compare the request with previous requests stored in global log
+    using LLM judging with structured output. Creates a single prompt for all
+    comparisons to minimize latency.
     Returns entity ID if match found, None otherwise.
     """
-    print("\n>> Comparing with previous requests...")
+    print("\n>> Comparing with previous requests using LLM judge...")
 
-    for entity_id, prev_request in entity_requests.items():
-        # Simple heuristic: if schema and description are very similar, reuse
-        if (prev_request.schema_id == param.schema_id and
-                prev_request.entity_description.strip().lower() ==
-                param.entity_description.strip().lower()):
-            print(f"Found matching previous request: {entity_id}")
-            return entity_id
+    if not entity_requests:
+        print("No previous requests to compare")
+        return None
+
+    # Filter to same schema only
+    relevant_requests = {
+        entity_id: req
+        for entity_id, req in entity_requests.items()
+        if req.schema_id == param.schema_id
+    }
+
+    if not relevant_requests:
+        print("No previous requests with matching schema")
+        return None
+
+    # Build comparison schema
+    comparison_schema = ComparisonResult.model_json_schema()
+
+    # Create an LLM instance with structured output for comparison
+    if model_supports_structured_output(llm, tools=[]):
+        judge_response_format = ProviderStrategy(
+            schema=comparison_schema,
+            strict=True
+        )
+    else:
+        judge_response_format = ToolStrategy(
+            schema=comparison_schema
+        )
+
+    judge_agent = create_agent(
+        model=llm,
+        response_format=judge_response_format,
+        tools=[],
+    )
+
+    # Build a single prompt with all previous requests
+    previous_requests_text = "\n".join([
+        f"- Entity ID: {entity_id}\n"
+        f"  Schema: {req.schema_id}\n"
+        f"  Description: {req.entity_description}"
+        for entity_id, req in relevant_requests.items()
+    ])
+
+    prompt = f"""You need to determine if the following NEW request describes
+the same entity as any of the PREVIOUS requests.
+
+NEW REQUEST:
+- Schema: {param.schema_id}
+- Description: {param.entity_description}
+
+PREVIOUS REQUESTS:
+{previous_requests_text}
+
+Determine if the NEW request describes the SAME entity as any of the
+previous requests.
+Consider entities the same if they refer to the same person, organization,
+or object, even if worded differently.
+If a match is found, return the matching_entity_id
+(e.g., "Item:OSW...").
+If no match is found, return an empty string for matching_entity_id.
+"""
+
+    try:
+        result = judge_agent.invoke({
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You compare entity descriptions to determine "
+                        "if they refer to the same entity."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        })
+
+        if "structured_response" in result:
+            comparison = ComparisonResult(**result["structured_response"])
+            print(f"LLM judge result: {comparison.reasoning}")
+
+            if (comparison.matching_entity_id and
+                    comparison.matching_entity_id.strip()):
+                matching_id = comparison.matching_entity_id.strip()
+                # Verify the entity ID is in our list
+                if matching_id in relevant_requests:
+                    print(f"Found matching previous request: {matching_id}")
+                    return matching_id
+                else:
+                    print(
+                        f"Warning: LLM returned ID not in list: "
+                        f"{matching_id}"
+                    )
+        else:
+            print("Warning: No structured_response in judge result")
+
+    except Exception as e:
+        print(f"Error in LLM judge comparison: {e}")
 
     print("No matching previous request found")
     return None
@@ -224,8 +319,11 @@ def create_linked_entity(param: CreateParam) -> str | None:
     entity_uuid = uuid.uuid4()
     entity_id = "Item:OSW" + entity_uuid.hex
 
+    # Get LLM model early for comparison and other steps
+    model = get_llm()
+
     # Step 2: Early comparison with previous requests
-    existing_from_log = compare_with_previous_requests(param)
+    existing_from_log = compare_with_previous_requests(param, model)
     if existing_from_log is not None:
         return existing_from_log
 
@@ -263,8 +361,6 @@ def create_linked_entity(param: CreateParam) -> str | None:
     except Exception as e:
         print(f"Error exporting schema for {param.schema_name}: {e}")
         return None
-
-    model = get_llm()
 
     # Step 3: Identify fillable properties
     fillable_properties = identify_fillable_properties(
