@@ -134,8 +134,9 @@ def lookup_exact_schema(prompt: str) -> str:
     )
 
     llm = get_llm()
-    if hasattr(llm, "reasoning_effort"):
-        llm.reasoning_effort = "high"
+    # ToDo: Non-reasoning models may not support this param
+    # if hasattr(llm, "reasoning_effort"):
+    #     llm.reasoning_effort = "high"
     if model_supports_structured_output(llm):
         # Model supports provider strategy - use it
         effective_response_format = ProviderStrategy(
