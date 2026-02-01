@@ -419,6 +419,7 @@ def create_linked_entity(param: CreateParam) -> str | None:
         "Fill ONLY the properties that you have actual information for. "
         "Do not invent any new information that is not provided in "
         "the prompt. "
+        "Do not generate any dummy or placeholder values. "
         "For properties with a 'range' annotation, provide a textual "
         "description of the linked entity (if you have information), "
         "not an ID. "
