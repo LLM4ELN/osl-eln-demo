@@ -1,5 +1,9 @@
 # OSL ELN Demo
 
+> **[Iterative Agent Demo Visualization](docs/README.md)** - See how the iterative agent builds a knowledge graph from natural language experiment descriptions.
+
+![Iterative Agent Knowledge Graph Animation](docs/knowledge-graph-d3.gif)
+
 ## Prerequisites
 
 Follow https://github.com/LLM4ELN/llm4eln-assessment to set up the project, virtual environment and llm provider (step 1-3).
