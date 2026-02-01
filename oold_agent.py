@@ -1,9 +1,10 @@
-"""OoldAgent - Reusable agent for creating and managing OpenSemantic entities."""
+"""OoldAgent - Reusable agent for creating and managing OpenSemantic
+entities."""
 
 import json
 import re
 import uuid
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy, ToolStrategy
@@ -14,6 +15,7 @@ import opensemantic.core.v1  # noqa: F401 needed for eval
 import opensemantic.base.v1  # noqa: F401 needed for eval
 import opensemantic.lab.v1  # noqa: F401 needed for eval
 
+from rag_init import get_vector_store
 from util import (
     modify_schema,
     post_process_llm_json_response,
@@ -23,7 +25,7 @@ from util import (
 )
 from llm_init import get_llm, model_supports_structured_output
 from schema_catalog import lookup_exact_schema, get_cached_inventory
-from osl_init import build_vector_store, lookup_excact_matching_entity
+from osl_init import lookup_excact_matching_entity
 
 
 class CreateParam(BaseModel):
@@ -41,7 +43,8 @@ class CreateParam(BaseModel):
     e.g. 'Category:OSWabcdef1234567890'. Empty to auto-detect.
     """
     schema_name: str = ""
-    """name of the schema to use for creation of the entity. Empty to auto-detect."""
+    """name of the schema to use for creation of the entity.
+    Empty to auto-detect."""
     entity_description: str = Field(..., min_length=1)
     """textual description of the entity to create
     containing all available information
@@ -63,7 +66,7 @@ class ComparisonResult(BaseModel):
     )
 
 
-class OoldAgent:
+class OoldAgent(BaseModel):
     """Agent for creating and managing OpenSemantic Lab entities.
 
     This agent handles:
@@ -74,31 +77,34 @@ class OoldAgent:
     - Recursive creation of linked entities
     """
 
-    def __init__(
-        self,
-        vector_store: Any = None,
-        llm: Any = None,
-        use_llm_judge: bool = True
-    ):
-        """Initialize the OoldAgent.
+    vector_store: Optional[Any] = None
+    """Vector store for entity lookup.
+    If None, builds one on first use."""
+    llm: Optional[Any] = None
+    """Language model to use.
+    If None, uses default from get_llm() on first use."""
+    use_llm_judge: bool = True
+    """Whether to use LLM judge for entity comparison."""
+    entities: Dict[str, Any] = Field(default_factory=dict)
+    """Created entities, keyed by IRI."""
+    entity_requests: Dict[str, CreateParam] = Field(default_factory=dict)
+    """Previous entity creation requests, keyed by entity ID."""
 
-        Args:
-            vector_store: Vector store for entity lookup. If None, builds one.
-            llm: Language model to use. If None, uses default from get_llm().
-            use_llm_judge: Whether to use LLM judge for entity comparison.
-        """
-        self.entities: Dict[str, OswBaseModel] = {}
-        self.entity_requests: Dict[str, CreateParam] = {}
-        self.vector_store = vector_store or build_vector_store()
-        self._llm = llm
-        self.use_llm_judge = use_llm_judge
+    model_config = {
+        "arbitrary_types_allowed": True,
+    }
 
-    @property
-    def llm(self):
+    def __init__(self, **data):
+        super().__init__(**data)
+        # Lazy initialization of vector_store
+        if self.vector_store is None:
+            object.__setattr__(self, 'vector_store', get_vector_store())
+
+    def _get_llm(self):
         """Get the LLM, creating one if needed."""
-        if self._llm is None:
-            self._llm = get_llm()
-        return self._llm
+        if self.llm is None:
+            object.__setattr__(self, 'llm', get_llm())
+        return self.llm
 
     def _schemas_are_compatible(
         self, schema_id_1: str, schema_id_2: str
@@ -124,9 +130,11 @@ class OoldAgent:
         entity_description: str,
         schema: dict
     ) -> list[str]:
-        """Ask LLM to identify which properties can be filled from description.
+        """Ask LLM to identify which properties can be filled from
+        description.
 
-        Returns list of property names that can be filled without hallucinating.
+        Returns list of property names that can be filled without
+        hallucinating.
         """
         print("\n>> Identifying fillable properties...")
 
@@ -154,19 +162,24 @@ Return your answer as a JSON array of property names,
 e.g.: ["property1", "property2"]
 """
 
-        response = self.llm.invoke(prompt)
+        response = self._get_llm().invoke(prompt)
         try:
             content = (
                 response.content if hasattr(response, 'content')
                 else str(response)
             )
-            json_match = re.search(r'\[.*?\]', content, re.DOTALL)
+            json_match = re.search(
+                r'\[.*?\]', content, re.DOTALL
+            )
             if json_match:
                 fillable = json.loads(json_match.group())
                 print(f"Fillable properties: {fillable}")
                 return fillable
             else:
-                print("Warning: Could not parse fillable properties, using all")
+                print(
+                    "Warning: Could not parse fillable properties, "
+                    "using all"
+                )
                 return list(properties.keys())
         except Exception as e:
             print(f"Error parsing fillable properties: {e}, using all")
@@ -240,7 +253,7 @@ e.g.: ["property1", "property2"]
 
         comparison_schema = ComparisonResult.model_json_schema()
 
-        if model_supports_structured_output(self.llm, tools=[]):
+        if model_supports_structured_output(self._get_llm(), tools=[]):
             judge_response_format = ProviderStrategy(
                 schema=comparison_schema,
                 strict=True
@@ -251,20 +264,21 @@ e.g.: ["property1", "property2"]
             )
 
         judge_agent = create_agent(
-            model=self.llm,
+            model=self._get_llm(),
             response_format=judge_response_format,
             tools=[],
         )
 
-        previous_requests_text = "\n".join([
+        request_items = [
             f"- Entity ID: {entity_id}\n"
             f"  Schema: {req.schema_id}\n"
             f"  Description: {req.entity_description}"
             for entity_id, req in relevant_requests.items()
-        ])
+        ]
+        previous_requests_text = "\n".join(request_items)
 
-        prompt = f"""You need to determine if the following NEW request describes
-the same entity as any of the PREVIOUS requests.
+        prompt = f"""You need to determine if the following NEW request
+describes the same entity as any of the PREVIOUS requests.
 
 NEW REQUEST:
 - Schema: {param.schema_id}
@@ -307,7 +321,10 @@ If no match is found, return an empty string for matching_entity_id.
                         comparison.matching_entity_id.strip()):
                     matching_id = comparison.matching_entity_id.strip()
                     if matching_id in relevant_requests:
-                        print(f"Found matching previous request: {matching_id}")
+                        print(
+                            f"Found matching previous request: "
+                            f"{matching_id}"
+                        )
                         return matching_id
                     else:
                         print(
@@ -334,9 +351,12 @@ If no match is found, return an empty string for matching_entity_id.
         This is the main public interface for creating entities.
 
         Args:
-            prompt: Natural language description of the entity to create
-            schema_id: Optional schema ID (e.g., 'Category:OSWxxx'). Auto-detected if empty.
-            schema_name: Optional schema name. Auto-detected if empty.
+            prompt: Natural language description of the entity to
+            create
+            schema_id: Optional schema ID
+            (e.g., 'Category:OSWxxx'). Auto-detected if empty.
+            schema_name: Optional schema name. Auto-detected if
+            empty.
 
         Returns:
             Entity ID (e.g., 'Item:OSWxxx') or None if creation failed
@@ -447,8 +467,10 @@ If no match is found, return an empty string for matching_entity_id.
         # Step 5: Create entity with structured output
         sys_prompt = (
             "You are an expert laboratory assistant. "
-            "You always answer in valid JSON according to the provided schema. "
-            "Fill ONLY the properties that you have actual information for. "
+            "You always answer in valid JSON according to the "
+            "provided schema. "
+            "Fill ONLY the properties that you have actual "
+            "information for. "
             "Do not invent any new information that is not provided in "
             "the prompt. "
             "Do not generate any dummy or placeholder values. "
@@ -459,7 +481,7 @@ If no match is found, return an empty string for matching_entity_id.
             "empty or null. "
         )
 
-        if model_supports_structured_output(self.llm, tools=[]):
+        if model_supports_structured_output(self._get_llm(), tools=[]):
             effective_response_format = ProviderStrategy(
                 schema=filtered_schema,
                 strict=True
@@ -469,19 +491,22 @@ If no match is found, return an empty string for matching_entity_id.
                 schema=filtered_schema
             )
 
-        if hasattr(self.llm, "max_retries"):
-            self.llm.max_retries = 1
+        llm = self._get_llm()
+        if hasattr(llm, "max_retries"):
+            llm.max_retries = 1
 
         agent = create_agent(
-            model=self.llm,
+            model=self._get_llm(),
             response_format=effective_response_format,
             tools=[],
         )
 
+        schema_str = json.dumps(filtered_schema, indent=2)
         user_prompt = (
-            f"Create a JSON document based on the following description:\n"
+            f"Create a JSON document based on the following "
+            f"description:\n"
             f"{param.entity_description}\n\n"
-            f"Use the following schema:\n{json.dumps(filtered_schema, indent=2)}"
+            f"Use the following schema:\n{schema_str}"
         )
 
         max_retries = 3
@@ -491,7 +516,8 @@ If no match is found, return an empty string for matching_entity_id.
         while retry_count < max_retries:
             attempt_num = retry_count + 1
             print(
-                f"Invoking agent for entity creation (attempt {attempt_num})..."
+                f"Invoking agent for entity creation "
+                f"(attempt {attempt_num})..."
             )
 
             try:
@@ -512,7 +538,9 @@ If no match is found, return an empty string for matching_entity_id.
                 )
                 return None
 
-            result = post_process_llm_json_response(result["structured_response"])
+            result = post_process_llm_json_response(
+                result["structured_response"]
+            )
             result["uuid"] = str(entity_uuid)
 
             print(f"Structured Response for {param.schema_name}:")

@@ -8,14 +8,16 @@ from opensemantic.core.v1 import Entity
 
 from oold_agent import OoldAgent
 from osw.core import OSW
-from osl_init import get_osl_client
+from osl_init import get_osl_client, build_vector_store
 
 
 # Main execution
 start_time = time.time()
 
 # Create agent instance
-agent = OoldAgent()
+agent = OoldAgent(
+    vector_store=build_vector_store()
+)
 
 # Create entity from description
 result = agent.invoke(
