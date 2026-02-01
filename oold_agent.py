@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy, ToolStrategy
+from langchain_core.documents import Document
 from pydantic import BaseModel, Field
 
 from opensemantic.v1 import OswBaseModel
@@ -638,6 +639,30 @@ If no match is found, return an empty string for matching_entity_id.
     def get_entities(self) -> Dict[str, OswBaseModel]:
         """Get all created entities."""
         return self.entities
+    
+    def store_entities(self):
+        """Store all created entities in vector store."""
+        for entity_id, entity in self.entities.items():
+            # Serialize entity to JSON
+            jsondata = json.loads(entity.json(exclude_none=True))
+
+            # Create langchain document
+            doc = Document(
+                id=entity_id,
+                page_content=json.dumps({"jsondata": jsondata}),
+                metadata={
+                    "name": (
+                        jsondata.get("name", "")
+                    ),
+                    "type": jsondata.get("type", [""])[0] if isinstance(
+                        jsondata.get("type"), list
+                    ) else jsondata.get("type", "")
+                }
+            )
+
+            # Add to vector store
+            self.vector_store.add_documents(documents=[doc])
+            print(f"Stored entity {entity_id} in vector store")
 
     def clear(self):
         """Clear all stored entities and requests."""

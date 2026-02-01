@@ -32,6 +32,9 @@ result = agent.invoke(
 # Print results
 print("\n\n=== Created / Looked up entities ===")
 entities = agent.get_entities()
+agent.store_entities()  # Store entities in vector store
+agent.clear()  # reset agent state
+
 for i, e in entities.items():
     e: OswBaseModel
     print(f"#### {i} ({e.name}) ####")

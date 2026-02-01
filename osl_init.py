@@ -136,10 +136,10 @@ def build_vector_store():
             page_content=json.dumps(page._slots),
             metadata={
                 "name": (
-                    page.get_slot_content("jsondata").get("name", "Unknown")
+                    page.get_slot_content("jsondata").get("name", "")
                 ),
                 "type": (
-                    page.get_slot_content("jsondata").get("type", "Unknown")
+                    page.get_slot_content("jsondata").get("type", "")
                 ),
                 "url": page.get_url(),
             }
