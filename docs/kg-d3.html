@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animated Knowledge Graph</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        #graph {
+            width: 100%;
+            height: 90vh;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+        .node {
+            cursor: pointer;
+        }
+        .node circle {
+            fill: #69b3a2;
+            stroke: #333;
+            stroke-width: 2px;
+        }
+        .node.class-node circle {
+            fill: #ff9999;
+        }
+        .node.input-node circle {
+            fill: #999999;
+        }
+        .node.state-new circle {
+            stroke: #ff0000;
+            stroke-width: 3px;
+        }
+        .node.state-modified circle {
+            stroke: #ffcc00;
+            stroke-width: 3px;
+        }
+        .node.state-stored circle {
+            stroke: #333;
+            stroke-width: 2px;
+        }
+        .node text {
+            font-size: 14px;
+            font-weight: bold;
+            fill: #333;
+            pointer-events: none;
+            text-anchor: middle;
+        }
+        .node-label-bg {
+            fill: white;
+            opacity: 0.9;
+            stroke: #ccc;
+            stroke-width: 1px;
+        }
+        .link {
+            stroke: #999;
+            stroke-width: 2px;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
+        .link-label {
+            font-size: 10px;
+            fill: #666;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+        #controls {
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #status {
+            display: inline-block;
+            margin-left: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <button id="restartBtn" onclick="restartAnimation()">Restart Animation</button>
+        <button id="downloadBtn" onclick="downloadGIF()">Record GIF</button>
+        <label style="margin-left: 20px;">Speed: <input type="range" id="speedSlider" min="0.25" max="3" step="0.25" value="1" onchange="updateSpeed(this.value)"><span id="speedValue">1x</span></label>
+        <span id="status">Ready to start</span>
+    </div>
+    <div id="graph"></div>
+
+    <script>
+        const width = window.innerWidth - 40;
+        const height = window.innerHeight * 0.9;
+
+        let nodes = [];
+        let links = [];
+        let currentStep = 0;
+        let isAnimating = false;
+        let animationGeneration = 0;  // Track animation runs to cancel old animations
+        let gifRecorder = null;
+        let recordingFrames = [];
+
+        // Global speed multiplier (1 = normal, 0.5 = slower, 2 = faster)
+        let speedMultiplier = 1;
+
+        // Base timing values (in ms)
+        const BASE_TIMINGS = {
+            stepDelay: 1500,        // Delay between animation steps
+            pauseDelay: 2000,       // Extra pause for chapter breaks
+            transitionDuration: 500, // Node/link appearance
+            mergeDuration: 1000,    // Merge animation
+            bgTransition: 300,      // Background transitions
+            textRenderDelay: 600,   // Wait for text to render
+            labelUpdateDelay: 100   // Label background update
+        };
+
+        // Get timing adjusted by speed (higher speed = shorter time)
+        function getTime(key) {
+            return BASE_TIMINGS[key] / speedMultiplier;
+        }
+
+        function updateSpeed(value) {
+            speedMultiplier = parseFloat(value);
+            document.getElementById('speedValue').textContent = value + 'x';
+        }
+
+        // Create SVG
+        const svg = d3.select("#graph")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        // Define arrowhead marker
+        svg.append("defs").append("marker")
+            .attr("id", "arrowhead")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 25)
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,-5L10,0L0,5")
+            .attr("fill", "#999");
+
+        // Create container group for zoom/pan
+        const container = svg.append("g").attr("class", "zoom-container");
+
+        // Add zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", (event) => {
+                container.attr("transform", event.transform);
+            });
+
+        svg.call(zoom);
+
+        // Create groups for links and nodes within container
+        const linkGroup = container.append("g").attr("class", "links");
+        const nodeGroup = container.append("g").attr("class", "nodes");
+        const labelGroup = container.append("g").attr("class", "labels");
+
+        // Force simulation
+        const simulation = d3.forceSimulation()
+            .force("link", d3.forceLink().id(d => d.id).distance(200))
+            .force("charge", d3.forceManyBody().strength(-500))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(80));
+
+        // Animation sequence - each step can have multiple actions that run in parallel
+        const sequence = [
+            {
+                actions: [{
+                    action: "addNode",
+                    id: "input1",
+                    label: '"A tensile test experiment #1 conducted by Dr. Jane Doe, Example Lab Corp."',
+                    type: "input"
+                }],
+                status: "User input for Experiment #1..."
+            },
+            {
+                actions: [{ action: "pause" }],
+                status: "Processing input..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "e",
+                        label: "A tensile test experiment #1 conducted by Dr. Jane Doe, Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "addLink",
+                        source: "input1",
+                        target: "e",
+                        label: "",
+                        dashed: true
+                    }
+                ],
+                status: "Extracting experiment entity..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "eC",
+                        label: "LaboratoryProcess",
+                        type: "class"
+                    },
+                    {
+                        action: "addLink",
+                        source: "e",
+                        target: "eC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding LaboratoryProcess class and connecting..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "p",
+                        label: "Dr. Jane Doe, Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "updateNode",
+                        id: "e",
+                        label: "A tensile test experiment #1"
+                    },
+                    {
+                        action: "addLink",
+                        source: "e",
+                        target: "p",
+                        label: "actionee"
+                    }
+                ],
+                status: "Adding person and refining relationships..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "pC",
+                        label: "Person",
+                        type: "class"
+                    },
+                    {
+                        action: "addLink",
+                        source: "p",
+                        target: "pC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding Person class and connecting..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "o",
+                        label: "Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "updateNode",
+                        id: "p",
+                        label: "Dr. Jane Doe"
+                    },
+                    {
+                        action: "addLink",
+                        source: "p",
+                        target: "o",
+                        label: "organization"
+                    }
+                ],
+                status: "Adding organization and refining relationships..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "oC",
+                        label: "Organization",
+                        type: "class"
+                    },
+                    {
+                        action: "addLink",
+                        source: "o",
+                        target: "oC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding Organization class and connecting..."
+            },
+            {
+                actions: [
+                    {
+                        action: "updateNodeState",
+                        nodeIds: ["e", "p", "o"],
+                        state: "stored"
+                    },
+                    { action: "pause" }
+                ],
+                status: "--- Starting Experiment #2 ---"
+            },
+            {
+                actions: [{
+                    action: "addNode",
+                    id: "input2",
+                    label: '"A tensile test experiment #2 conducted by Dr. John Doe, Example Lab Corp."',
+                    type: "input"
+                }],
+                status: "User input for Experiment #2..."
+            },
+            {
+                actions: [{ action: "pause" }],
+                status: "Processing input..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "e2",
+                        label: "A tensile test experiment #2 conducted by Dr. John Doe, Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "addLink",
+                        source: "e2",
+                        target: "eC",
+                        label: "type"
+                    },
+                    {
+                        action: "addLink",
+                        source: "input2",
+                        target: "e2",
+                        label: "",
+                        dashed: true
+                    }
+                ],
+                status: "Extracting experiment entity and connecting to class..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "p2",
+                        label: "Dr. John Doe, Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "updateNode",
+                        id: "e2",
+                        label: "A tensile test experiment #2"
+                    },
+                    {
+                        action: "addLink",
+                        source: "e2",
+                        target: "p2",
+                        label: "actionee"
+                    },
+                    {
+                        action: "addLink",
+                        source: "p2",
+                        target: "pC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding second person and connecting relationships..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "o2",
+                        label: "Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "updateNode",
+                        id: "p2",
+                        label: "Dr. John Doe"
+                    },
+                    {
+                        action: "addLink",
+                        source: "p2",
+                        target: "o2",
+                        label: "organization"
+                    },
+                    {
+                        action: "addLink",
+                        source: "o2",
+                        target: "oC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding second organization and connecting relationships..."
+            },
+            {
+                actions: [{
+                    action: "addLink",
+                    source: "o2",
+                    target: "o",
+                    label: "sameAs"
+                }],
+                status: "Identifying organizations as the same..."
+            },
+            {
+                actions: [{
+                    action: "mergeNodes",
+                    sourceId: "o2",
+                    targetId: "o"
+                }],
+                status: "Merging duplicate organizations..."
+            },
+            {
+                actions: [
+                    {
+                        action: "updateNodeState",
+                        nodeIds: ["e2", "p2"],
+                        state: "stored"
+                    },
+                    { action: "pause" }
+                ],
+                status: "--- Starting Experiment #3 ---"
+            },
+            {
+                actions: [{
+                    action: "addNode",
+                    id: "input3",
+                    label: '"A tensile test experiment #3 conducted by Dr. John Doe, Manager of Example Lab Corp."',
+                    type: "input"
+                }],
+                status: "User input for Experiment #3..."
+            },
+            {
+                actions: [{ action: "pause" }],
+                status: "Processing input..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "e3",
+                        label: "A tensile test experiment #3 conducted by Dr. John Doe, Manager of Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "addLink",
+                        source: "e3",
+                        target: "eC",
+                        label: "type"
+                    },
+                    {
+                        action: "addLink",
+                        source: "input3",
+                        target: "e3",
+                        label: "",
+                        dashed: true
+                    }
+                ],
+                status: "Extracting experiment entity and connecting to class..."
+            },
+            {
+                actions: [
+                    {
+                        action: "addNode",
+                        id: "p3",
+                        label: "Dr. John Doe, Manager of Example Lab Corp.",
+                        type: "instance"
+                    },
+                    {
+                        action: "updateNode",
+                        id: "e3",
+                        label: "A tensile test experiment #3"
+                    },
+                    {
+                        action: "addLink",
+                        source: "e3",
+                        target: "p3",
+                        label: "actionee"
+                    },
+                    {
+                        action: "addLink",
+                        source: "p3",
+                        target: "pC",
+                        label: "type"
+                    }
+                ],
+                status: "Adding third person and connecting relationships..."
+            },
+            {
+                actions: [{
+                    action: "addLink",
+                    source: "p3",
+                    target: "p2",
+                    label: "sameAs"
+                }],
+                status: "Identifying persons as the same..."
+            },
+            {
+                actions: [{
+                    action: "mergeNodes",
+                    sourceId: "p3",
+                    targetId: "p2"
+                }],
+                status: "Merging duplicate persons..."
+            },
+            {
+                actions: [
+                    {
+                        action: "updateNode",
+                        id: "p2",
+                        label: "Dr. John Doe"
+                    },
+                    {
+                        action: "addLink",
+                        source: "o",
+                        target: "p2",
+                        label: "manager"
+                    },
+                    {
+                        action: "updateNodeState",
+                        nodeIds: ["o"],
+                        state: "modified"
+                    }
+                ],
+                status: "Recognizing organization and adding manager relationship..."
+            },
+            {
+                actions: [
+                    {
+                        action: "updateNodeState",
+                        nodeIds: ["e3", "o"],
+                        state: "stored"
+                    },
+                    { action: "complete" }
+                ],
+                status: "Animation complete!"
+            }
+        ];
+
+        function updateGraph() {
+            // Update links
+            const link = linkGroup.selectAll(".link")
+                .data(links, d => `${d.source.id}-${d.target.id}-${d.label}`);
+
+            link.exit().remove();
+
+            const linkEnter = link.enter()
+                .append("path")
+                .attr("class", "link")
+                .attr("stroke-width", 0)
+                .attr("opacity", 0)
+                .attr("stroke-dasharray", d => d.dashed ? "5,5" : "none");
+
+            linkEnter.transition()
+                .duration(getTime('transitionDuration'))
+                .attr("stroke-width", 2)
+                .attr("opacity", 1);
+
+            // Update link labels
+            const linkLabel = labelGroup.selectAll(".link-label")
+                .data(links, d => `${d.source.id}-${d.target.id}-${d.label}`);
+
+            linkLabel.exit().remove();
+
+            const linkLabelEnter = linkLabel.enter()
+                .append("text")
+                .attr("class", "link-label")
+                .text(d => d.label)
+                .attr("opacity", 0);
+
+            linkLabelEnter.transition()
+                .duration(getTime('transitionDuration'))
+                .attr("opacity", 1);
+
+            // Update nodes
+            const node = nodeGroup.selectAll(".node")
+                .data(nodes, d => d.id);
+
+            node.exit().remove();
+
+            const nodeEnter = node.enter()
+                .append("g")
+                .attr("class", d => `node ${d.type === 'class' ? 'class-node' : d.type === 'input' ? 'input-node' : ''} ${d.state ? 'state-' + d.state : ''}`)
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended));
+
+            nodeEnter.append("circle")
+                .attr("r", 0)
+                .transition()
+                .duration(getTime('transitionDuration'))
+                .attr("r", 20);
+
+            // Add text background
+            nodeEnter.append("rect")
+                .attr("class", "node-label-bg")
+                .attr("x", 0)
+                .attr("y", 30)
+                .attr("width", 0)
+                .attr("height", 0)
+                .attr("rx", 3)
+                .attr("opacity", 0);
+
+            // Add text
+            nodeEnter.append("text")
+                .attr("dy", 40)
+                .attr("opacity", 0)
+                .each(function(d) {
+                    const text = d3.select(this);
+                    const words = wrapText(d.label, 30);
+                    words.forEach((word, i) => {
+                        text.append("tspan")
+                            .attr("x", 0)
+                            .attr("dy", i === 0 ? 0 : 15)
+                            .text(word);
+                    });
+                })
+                .transition()
+                .duration(getTime('transitionDuration'))
+                .attr("opacity", 1);
+
+            // Update text backgrounds after text is rendered
+            setTimeout(() => {
+                nodeGroup.selectAll(".node").each(function() {
+                    const node = d3.select(this);
+                    const text = node.select("text").node();
+                    if (text) {
+                        const bbox = text.getBBox();
+                        node.select(".node-label-bg")
+                            .attr("x", bbox.x - 4)
+                            .attr("y", bbox.y - 2)
+                            .attr("width", bbox.width + 8)
+                            .attr("height", bbox.height + 4)
+                            .transition()
+                            .duration(getTime('bgTransition'))
+                            .attr("opacity", 0.9);
+                    }
+                });
+            }, getTime('textRenderDelay'));
+
+            // Update existing node labels and state classes
+            nodeGroup.selectAll(".node").each(function(d) {
+                const node = d3.select(this);
+                const text = node.select("text");
+
+                // Update state class
+                node.classed("state-new", d.state === "new")
+                    .classed("state-modified", d.state === "modified")
+                    .classed("state-stored", d.state === "stored");
+
+                // Clear existing tspans
+                text.selectAll("tspan").remove();
+
+                // Add new tspans
+                const words = wrapText(d.label, 30);
+                words.forEach((word, i) => {
+                    text.append("tspan")
+                        .attr("x", 0)
+                        .attr("dy", i === 0 ? 0 : 15)
+                        .text(word);
+                });
+
+                // Update background
+                setTimeout(() => {
+                    const textNode = text.node();
+                    if (textNode) {
+                        const bbox = textNode.getBBox();
+                        node.select(".node-label-bg")
+                            .transition()
+                            .duration(getTime('bgTransition'))
+                            .attr("x", bbox.x - 4)
+                            .attr("y", bbox.y - 2)
+                            .attr("width", bbox.width + 8)
+                            .attr("height", bbox.height + 4);
+                    }
+                }, getTime('labelUpdateDelay'));
+            });
+
+            // Update simulation
+            simulation.nodes(nodes);
+            simulation.force("link").links(links);
+            simulation.alpha(0.3).restart();
+        }
+
+        function truncateText(text, maxLength) {
+            return text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
+        }
+
+        function wrapText(text, maxCharsPerLine) {
+            const words = text.split(" ");
+            const lines = [];
+            let currentLine = "";
+
+            words.forEach(word => {
+                if ((currentLine + " " + word).trim().length <= maxCharsPerLine) {
+                    currentLine = (currentLine + " " + word).trim();
+                } else {
+                    if (currentLine) lines.push(currentLine);
+                    currentLine = word;
+                }
+            });
+
+            if (currentLine) lines.push(currentLine);
+
+            // Limit to 4 lines max
+            if (lines.length > 4) {
+                lines[3] = lines[3] + "...";
+                return lines.slice(0, 4);
+            }
+
+            return lines;
+        }
+
+        // Check if a link has a reverse link (bidirectional pair)
+        function hasReverseLink(link) {
+            return links.some(l =>
+                l.source.id === link.target.id &&
+                l.target.id === link.source.id &&
+                l !== link
+            );
+        }
+
+        // Get curve direction for bidirectional links
+        function getCurveDirection(link) {
+            // Always return 1 - the perpendicular vector naturally flips
+            // based on edge direction, giving us opposite curves
+            return 1;
+        }
+
+        function tick() {
+            const curveOffset = 40; // How much to curve bidirectional edges
+
+            linkGroup.selectAll(".link")
+                .attr("d", d => {
+                    const dx = d.target.x - d.source.x;
+                    const dy = d.target.y - d.source.y;
+
+                    // Check if this is a bidirectional edge
+                    if (hasReverseLink(d)) {
+                        const direction = getCurveDirection(d);
+                        // Calculate perpendicular offset for curve control point
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist === 0) return `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`;
+
+                        // Perpendicular vector
+                        const px = -dy / dist * curveOffset * direction;
+                        const py = dx / dist * curveOffset * direction;
+
+                        // Control point at midpoint, offset perpendicular to line
+                        const cx = (d.source.x + d.target.x) / 2 + px;
+                        const cy = (d.source.y + d.target.y) / 2 + py;
+
+                        return `M${d.source.x},${d.source.y}Q${cx},${cy} ${d.target.x},${d.target.y}`;
+                    }
+
+                    return `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`;
+                });
+
+            labelGroup.selectAll(".link-label")
+                .attr("x", d => {
+                    if (hasReverseLink(d)) {
+                        const dx = d.target.x - d.source.x;
+                        const dy = d.target.y - d.source.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist === 0) return (d.source.x + d.target.x) / 2;
+
+                        const direction = getCurveDirection(d);
+                        const px = -dy / dist * curveOffset * direction;
+                        return (d.source.x + d.target.x) / 2 + px;
+                    }
+                    return (d.source.x + d.target.x) / 2;
+                })
+                .attr("y", d => {
+                    if (hasReverseLink(d)) {
+                        const dx = d.target.x - d.source.x;
+                        const dy = d.target.y - d.source.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist === 0) return (d.source.y + d.target.y) / 2;
+
+                        const direction = getCurveDirection(d);
+                        const py = dx / dist * curveOffset * direction;
+                        return (d.source.y + d.target.y) / 2 + py;
+                    }
+                    return (d.source.y + d.target.y) / 2;
+                });
+
+            nodeGroup.selectAll(".node")
+                .attr("transform", d => `translate(${d.x},${d.y})`);
+        }
+
+        simulation.on("tick", tick);
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        async function executeStep(step, generation) {
+            // Bail out if this is from an old animation run
+            if (generation !== animationGeneration) return;
+
+            const stepData = sequence[step];
+            document.getElementById("status").textContent = stepData.status;
+
+            // Process all actions in this step
+            for (const actionData of stepData.actions) {
+                // Check generation before each action
+                if (generation !== animationGeneration) return;
+
+                switch (actionData.action) {
+                    case "addNode":
+                        nodes.push({
+                            id: actionData.id,
+                            label: actionData.label,
+                            type: actionData.type,
+                            state: actionData.state || (actionData.type === 'instance' ? 'new' : 'stored'),
+                            x: width / 2 + (Math.random() - 0.5) * 100,
+                            y: height / 2 + (Math.random() - 0.5) * 100
+                        });
+                        break;
+
+                    case "addLink":
+                        const source = nodes.find(n => n.id === actionData.source);
+                        const target = nodes.find(n => n.id === actionData.target);
+                        if (source && target) {
+                            links.push({
+                                source: source,
+                                target: target,
+                                label: actionData.label,
+                                dashed: actionData.dashed || false
+                            });
+                        }
+                        break;
+
+                    case "updateNode":
+                        const nodeToUpdate = nodes.find(n => n.id === actionData.id);
+                        if (nodeToUpdate) {
+                            if (actionData.label !== undefined) nodeToUpdate.label = actionData.label;
+                            if (actionData.state !== undefined) nodeToUpdate.state = actionData.state;
+                        }
+                        break;
+
+                    case "updateNodeState":
+                        // Update state of multiple nodes at once
+                        const nodeIds = actionData.nodeIds || [];
+                        const newState = actionData.state;
+                        nodeIds.forEach(nodeId => {
+                            const n = nodes.find(node => node.id === nodeId);
+                            if (n) n.state = newState;
+                        });
+                        // Update visual state classes
+                        nodeIds.forEach(nodeId => {
+                            nodeGroup.selectAll(".node")
+                                .filter(d => d.id === nodeId)
+                                .attr("class", d => `node ${d.type === 'class' ? 'class-node' : d.type === 'input' ? 'input-node' : ''} ${d.state ? 'state-' + d.state : ''}`);
+                        });
+                        break;
+
+                    case "mergeNodes":
+                        const sourceNode = nodes.find(n => n.id === actionData.sourceId);
+                        const targetNode = nodes.find(n => n.id === actionData.targetId);
+
+                        if (sourceNode && targetNode) {
+                            // Animate source node moving to target
+                            const sourceNodeElement = nodeGroup.selectAll(".node")
+                                .filter(d => d.id === actionData.sourceId);
+
+                            sourceNodeElement.transition()
+                                .duration(getTime('mergeDuration'))
+                                .attr("transform", `translate(${targetNode.x},${targetNode.y})`)
+                                .style("opacity", 0);
+
+                            // Wait for animation
+                            await new Promise(resolve => setTimeout(resolve, getTime('mergeDuration')));
+
+                            // Check generation after await
+                            if (generation !== animationGeneration) return;
+
+                            // Update all links from source to point to target
+                            links.forEach(link => {
+                                if (link.source.id === actionData.sourceId) {
+                                    link.source = targetNode;
+                                }
+                                if (link.target.id === actionData.sourceId) {
+                                    link.target = targetNode;
+                                }
+                            });
+
+                            // Remove "sameAs" links between the merged nodes AND any self-referencing links
+                            const filteredLinks = links.filter(link => {
+                                // Remove sameAs links between the two merged nodes
+                                const isSameAsBetweenMerged = link.label === "sameAs" &&
+                                    ((link.source.id === actionData.sourceId && link.target.id === actionData.targetId) ||
+                                     (link.source.id === actionData.targetId && link.target.id === actionData.sourceId));
+
+                                // Remove any self-referencing links (where source and target are the same)
+                                const isSelfReference = link.source.id === link.target.id;
+
+                                return !isSameAsBetweenMerged && !isSelfReference;
+                            });
+                            links.length = 0;
+                            links.push(...filteredLinks);
+
+                            // Remove source node
+                            const nodeIndex = nodes.findIndex(n => n.id === actionData.sourceId);
+                            if (nodeIndex !== -1) {
+                                nodes.splice(nodeIndex, 1);
+                            }
+
+                            // Remove the source node element
+                            sourceNodeElement.remove();
+                        }
+                        break;
+
+                    case "removeNode":
+                        const nodeToRemove = nodes.findIndex(n => n.id === actionData.id);
+                        if (nodeToRemove !== -1) {
+                            nodes.splice(nodeToRemove, 1);
+                            // Remove associated links
+                            const filteredLinks = links.filter(link =>
+                                link.source.id !== actionData.id && link.target.id !== actionData.id
+                            );
+                            links.length = 0;
+                            links.push(...filteredLinks);
+                            // Remove visual element
+                            nodeGroup.selectAll(".node").filter(d => d.id === actionData.id).remove();
+                        }
+                        break;
+
+                    case "pause":
+                        // Long pause for chapter breaks
+                        await new Promise(resolve => setTimeout(resolve, getTime('pauseDelay')));
+                        // Check generation after await
+                        if (generation !== animationGeneration) return;
+                        break;
+
+                    case "complete":
+                        isAnimating = false;
+                        return;
+                }
+            }
+
+            // Check generation before updateGraph
+            if (generation !== animationGeneration) return;
+
+            updateGraph();
+
+            // Wait before next step
+            await new Promise(resolve => setTimeout(resolve, getTime('stepDelay')));
+
+            // Check generation and isAnimating before next step
+            if (step < sequence.length - 1 && isAnimating && generation === animationGeneration) {
+                executeStep(step + 1, generation);
+            }
+        }
+
+        // Setup initial state from sequence (step 0 defines the initial input node)
+        function setupInitialState() {
+            const initialStep = sequence[0];
+            for (const actionData of initialStep.actions) {
+                if (actionData.action === "addNode") {
+                    nodes.push({
+                        id: actionData.id,
+                        label: actionData.label,
+                        type: actionData.type,
+                        x: width / 2,
+                        y: height / 2
+                    });
+                }
+            }
+            document.getElementById("status").textContent = initialStep.status;
+            updateGraph();
+        }
+
+        async function restartAnimation() {
+            // Increment generation to invalidate all pending operations from previous run
+            animationGeneration++;
+            const currentGeneration = animationGeneration;
+
+            // Stop current animation
+            isAnimating = false;
+
+            // Clear graph immediately
+            nodes.length = 0;
+            links.length = 0;
+            currentStep = 0;
+
+            // Stop all transitions
+            nodeGroup.selectAll("*").interrupt();
+            linkGroup.selectAll("*").interrupt();
+            labelGroup.selectAll("*").interrupt();
+
+            // Remove all visual elements
+            nodeGroup.selectAll(".node").remove();
+            linkGroup.selectAll(".link").remove();
+            labelGroup.selectAll(".link-label").remove();
+
+            // Stop and reset simulation
+            simulation.stop();
+            simulation.nodes(nodes);
+            simulation.force("link").links(links);
+
+            // Setup initial state from sequence (shows the first input node)
+            setupInitialState();
+
+            // Reset zoom/pan transform
+            svg.transition().duration(getTime('bgTransition')).call(zoom.transform, d3.zoomIdentity);
+
+            // Start animation after a brief delay
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Only start if still the current generation (no other restart happened)
+            if (currentGeneration === animationGeneration) {
+                isAnimating = true;
+                // Start from step 1 (step 0 is the initial state already shown)
+                executeStep(1, currentGeneration);
+            }
+        }
+
+        async function downloadGIF() {
+            try {
+                document.getElementById("status").textContent = "Preparing GIF recording...";
+
+                // Increment generation to invalidate all pending operations from previous run
+                animationGeneration++;
+                const currentGeneration = animationGeneration;
+
+                // Stop current animation
+                isAnimating = false;
+
+                // Clear graph immediately
+                nodes.length = 0;
+                links.length = 0;
+                currentStep = 0;
+
+                // Stop all transitions
+                nodeGroup.selectAll("*").interrupt();
+                linkGroup.selectAll("*").interrupt();
+                labelGroup.selectAll("*").interrupt();
+
+                // Remove all visual elements
+                nodeGroup.selectAll(".node").remove();
+                linkGroup.selectAll(".link").remove();
+                labelGroup.selectAll(".link-label").remove();
+
+                // Stop and reset simulation
+                simulation.stop();
+                simulation.nodes(nodes);
+                simulation.force("link").links(links);
+
+                // Reset zoom/pan transform
+                svg.call(zoom.transform, d3.zoomIdentity);
+
+                // Setup initial state from sequence (shows the first input node)
+                setupInitialState();
+
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+                // Check if another animation/recording started
+                if (currentGeneration !== animationGeneration) return;
+
+                // Create a new GIF encoder
+                const gif = new GIF({
+                    workers: 2,
+                    quality: 5, // 1-30, lower = better quality, more colors
+                    width: width,
+                    height: height,
+                    workerScript: 'gif.worker.js',
+                    background: '#f5f5f5'
+                });
+
+                const frames = [];
+
+                // Convert SVG to canvas with inline styles
+                const captureFrame = () => {
+                    return new Promise((resolve, reject) => {
+                        try {
+                            const svgElement = document.querySelector('#graph svg');
+
+                            // Clone the SVG to avoid modifying the original
+                            const clonedSvg = svgElement.cloneNode(true);
+
+                            // Add inline styles to preserve colors in the exported image
+                            const styleElement = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+                            styleElement.textContent = `
+                                .node circle { fill: #69b3a2; stroke: #333; stroke-width: 2px; }
+                                .node.class-node circle { fill: #ff9999; }
+                                .node.input-node circle { fill: #999999; }
+                                .node text { font-size: 14px; font-weight: bold; fill: #333; text-anchor: middle; font-family: Arial, sans-serif; }
+                                .node-label-bg { fill: white; opacity: 0.9; stroke: #ccc; stroke-width: 1px; }
+                                .link { stroke: #999; stroke-width: 2px; fill: none; }
+                                .link-label { font-size: 10px; fill: #666; font-family: Arial, sans-serif; }
+                            `;
+                            clonedSvg.insertBefore(styleElement, clonedSvg.firstChild);
+
+                            // Add xmlns attribute for proper SVG rendering
+                            clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+                            const svgString = new XMLSerializer().serializeToString(clonedSvg);
+                            const canvas = document.createElement('canvas');
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+
+                            const img = new Image();
+                            const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                            const url = URL.createObjectURL(blob);
+
+                            img.onload = () => {
+                                ctx.fillStyle = 'white';
+                                ctx.fillRect(0, 0, width, height);
+                                ctx.drawImage(img, 0, 0);
+                                URL.revokeObjectURL(url);
+                                // Return canvas context for gif.js to process
+                                resolve(ctx);
+                            };
+
+                            img.onerror = (err) => {
+                                URL.revokeObjectURL(url);
+                                reject(err);
+                            };
+
+                            img.src = url;
+                        } catch (err) {
+                            reject(err);
+                        }
+                    });
+                };
+
+                // Setup GIF rendering
+                gif.on('finished', (blob) => {
+                    console.log('GIF rendering complete, blob size:', blob.size);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'knowledge-graph-d3.gif';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(url), 100);
+                    document.getElementById("status").textContent = "GIF downloaded!";
+                });
+
+                gif.on('progress', (p) => {
+                    console.log('GIF encoding progress:', p);
+                    document.getElementById("status").textContent = `Rendering GIF... ${Math.round(p * 100)}%`;
+                });
+
+                gif.on('error', (err) => {
+                    console.error('GIF encoding error:', err);
+                    document.getElementById("status").textContent = "GIF encoding error: " + err.message;
+                });
+
+                // Start animation and capture frames
+                isAnimating = true;
+                let frameCount = 0;
+                const frameInterval = 150; // Capture every 150ms for smooth animation
+
+                const captureLoop = setInterval(async () => {
+                    try {
+                        // Stop if generation changed (another restart/recording happened)
+                        if (currentGeneration !== animationGeneration) {
+                            clearInterval(captureLoop);
+                            return;
+                        }
+
+                        if (!isAnimating) {
+                            clearInterval(captureLoop);
+
+                            // Capture a few more frames after animation ends
+                            for (let i = 0; i < 10; i++) {
+                                if (currentGeneration !== animationGeneration) return;
+                                const finalFrame = await captureFrame();
+                                frames.push(finalFrame);
+                            }
+
+                            console.log(`Captured ${frames.length} frames, starting render...`);
+                            document.getElementById("status").textContent = `Rendering ${frames.length} frames into GIF...`;
+
+                            // Add all frames to GIF
+                            for (let i = 0; i < frames.length; i++) {
+                                gif.addFrame(frames[i], { delay: frameInterval });
+                            }
+
+                            console.log('All frames added, calling render...');
+                            gif.render();
+                            return;
+                        }
+
+                        const frame = await captureFrame();
+                        frames.push(frame);
+                        document.getElementById("status").textContent = `Recording... ${frameCount + 1} frames`;
+                        frameCount++;
+                    } catch (err) {
+                        console.error('Frame capture error:', err);
+                        document.getElementById("status").textContent = "Frame capture error: " + err.message;
+                    }
+                }, frameInterval);
+
+                // Start animation from step 1 (step 0 is the initial state already shown)
+                executeStep(1, currentGeneration);
+
+            } catch (err) {
+                console.error('GIF recording error:', err);
+                document.getElementById("status").textContent = "GIF recording failed: " + err.message;
+            }
+        }
+
+        // Initialize
+        simulation.stop();
+
+        // Auto-start animation on page load
+        window.addEventListener('load', function() {
+            // Small delay to ensure everything is rendered
+            setTimeout(() => {
+                restartAnimation();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

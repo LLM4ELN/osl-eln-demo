@@ -1,3 +1,6 @@
+import os
+
+
 def is_object(item):
     return item is not None and isinstance(item, dict)
 
@@ -118,6 +121,9 @@ def modify_schema(schema, seen_refs=None, root=None):
     e.g. type: [string, null]. finally, make all properties required.
     """  # noqa: E501
 
+    model_type = os.environ.get("API_MODEL", "").lower()
+    is_openai_model = ("openai" in model_type or "gpt" in model_type)
+
     # fix: rename "defintions" to "$defs"
     if isinstance(schema, dict) and "definitions" in schema:
         schema["$defs"] = schema.pop("definitions")
@@ -138,20 +144,26 @@ def modify_schema(schema, seen_refs=None, root=None):
             'default*',
             # 'defaultProperties',
             'description*',
+            '_description',
             'eval_template',
             'headerTemplate',
+            'eval_template',
             # 'options',
             'propertyOrder',
             # 'range',
             # 'template',
             'titel*',
             'title*',
+            '_title',
             'uuid',
             'watch',
             # 'x-enum-descriptions',
             # 'x-enum-varnames',
             # 'x-oold-required-iri',
             'uniqueItems',
+
+            'multipleOf',  # not supported by some grammars
+
         ]
         for rk in rm_keys:
             if rk in schema:
@@ -160,21 +172,44 @@ def modify_schema(schema, seen_refs=None, root=None):
         if "object" in schema.get("type"):
             schema["additionalProperties"] = False
             properties = schema.get("properties", {})
-            required = schema.get("required", [])
+            # make all required for openai models
+            if is_openai_model:
+                required = schema.get("required", [])
             for prop, prop_schema in properties.items():
-                if prop not in required:
-                    if "type" in prop_schema:
-                        if isinstance(prop_schema["type"], list):
-                            if "null" not in prop_schema["type"]:
-                                prop_schema["type"].append("null")
+                # check if 'type', 'anyOf', 'oneOf', or 'allOf' is present
+                if not any(k in prop_schema for k in [
+                    "type", "anyOf", "oneOf", "allOf"
+                ]):
+                    # if not, assume string type
+                    print(
+                        f"Warning: No type found for property {prop}, "
+                        f"assuming string"
+                    )
+                    prop_schema["type"] = "string"
+
+                if is_openai_model:
+                    if prop not in required:
+                        if "type" in prop_schema:
+                            if isinstance(prop_schema["type"], list):
+                                if "null" not in prop_schema["type"]:
+                                    prop_schema["type"].append("null")
+                            else:
+                                prop_schema["type"] = [
+                                    prop_schema["type"], "null"
+                                ]
                         else:
-                            prop_schema["type"] = [prop_schema["type"], "null"]
-                    else:
-                        prop_schema["type"] = ["null"]
+                            prop_schema["type"] = ["null"]
+                else:
+                    pass
+                    # Don't add null to types - union types like
+                    # ["array", "null"] are not supported by structured
+                    # output APIs
                 # Recursively modify nested objects
                 schema["properties"][prop] = modify_schema(
                     prop_schema, root=root, seen_refs=seen_refs
                 )
+            # Make all properties required - LLM will provide empty defaults
+            # for fields without data ([], "", {})
             schema["required"] = list(properties.keys())
         elif "array" in schema.get("type"):
             items = schema.get("items")
@@ -230,6 +265,15 @@ def modify_schema(schema, seen_refs=None, root=None):
             ]:
                 schema.pop("format")
 
+        # cutoff subschemas if range annotation is present
+        if "range" in schema:
+            schema = {
+                "type": "string",
+                "range": schema["range"],
+                "title": schema.get("title", ""),
+                "description": schema.get("description", "")
+            }
+
     if root_level:
         # finally, remove $defs from root
         if "$defs" in schema:
@@ -255,6 +299,26 @@ def remove_nulls(d):
         return d
 
 
+def remove_empty(d):
+    """Remove empty string, arrays and object values from nested dicts
+    also handles ":null" string (produced by llama-3.3-70b-instruct)
+    as null value"""
+    if isinstance(d, dict):
+        return {
+            k: remove_empty(v)
+            for k, v in d.items()
+            if v != "" and v != ":null" and v != [] and v != {}
+        }
+    elif isinstance(d, list):
+        return [
+            remove_empty(i)
+            for i in d
+            if i != "" and i != ":null" and i != [] and i != {}
+        ]
+    else:
+        return d
+
+
 def remove_auto_defined_fields(d):
     """Remove auto-defined fields like 'uuid' and 'type' from nested dicts"""
     auto_defined_fields = ["uuid", "type"]
@@ -271,7 +335,20 @@ def remove_auto_defined_fields(d):
 
 def post_process_llm_json_response(response_json):
     """Post-process LLM JSON response by
-    removing null values and auto-defined fields"""
+    removing null values, empty strings, and auto-defined fields"""
     cleaned_response = remove_nulls(response_json)
+    cleaned_response = remove_empty(cleaned_response)
     cleaned_response = remove_auto_defined_fields(cleaned_response)
     return cleaned_response
+
+
+def schema_to_markdown(schema):
+    """Convert JSON schema to a markdown string for prompt inclusion"""
+    import json  # noqa: E402
+    schema_str = json.dumps(schema, indent=2)
+    markdown = f"""
+Here is the JSON schema you should follow:
+```json
+{schema_str}
+```"""
+    return markdown

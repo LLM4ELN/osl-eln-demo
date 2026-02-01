@@ -1257,7 +1257,7 @@ wheels = [
 
 [[package]]
 name = "oold"
-version = "0.11.3"
+version = "0.11.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "datamodel-code-generator" },
@@ -1269,9 +1269,9 @@ dependencies = [
     { name = "sparqlwrapper" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f1/29/4dd36c71dfa95b4c89947470af61a60e23d89a77ac3c95d49d71f5b2a15c/oold-0.11.3.tar.gz", hash = "sha256:3a514bcfea7e5b169ea980dc77472245e97a698eedcf7e438e8ab346346785fa", size = 665284 }
+sdist = { url = "https://files.pythonhosted.org/packages/66/90/a8597a57b95381a2b03feae84a4513361461ac93981fd52da5ae6ec4f587/oold-0.11.4.tar.gz", hash = "sha256:dce7a311c6a28f3c328eccb5556c7430b393122d8ab64020850299c63a188a6f", size = 665336 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1f/f4/e6a0b86bc6f8bea28ed6556319cf3e2f8ae639b396b7f655806fbc056ce1/oold-0.11.3-py3-none-any.whl", hash = "sha256:350aa4bd4f07a3ab509f1a6d2659716e5de046475dcbf66b423eaaa91d9ddafc", size = 167064 },
+    { url = "https://files.pythonhosted.org/packages/6f/53/b6e31d7b08f0fe73ac9551efe620e194536ab30a7ca9e7d13455df5ed779/oold-0.11.4-py3-none-any.whl", hash = "sha256:adbcfa62c218a7c05ac1c5a04e4905f3cff3f16795b53957d3f8996df0231eff", size = 167130 },
 ]
 
 [[package]]
@@ -1445,6 +1445,7 @@ dependencies = [
     { name = "langchain-google-genai" },
     { name = "langchain-ollama" },
     { name = "langchain-openai" },
+    { name = "oold" },
     { name = "opensemantic-lab" },
     { name = "osw" },
     { name = "python-dotenv" },
@@ -1457,6 +1458,7 @@ requires-dist = [
     { name = "langchain-google-genai", specifier = ">=4.2.0" },
     { name = "langchain-ollama", specifier = ">=1.0.1" },
     { name = "langchain-openai", specifier = ">=1.1.7" },
+    { name = "oold", specifier = ">=0.11.4" },
     { name = "opensemantic-lab", specifier = ">=0.6.1.post2000" },
     { name = "osw", git = "https://github.com/OpenSemanticLab/osw-python" },
     { name = "python-dotenv", specifier = ">=1.2.1" },

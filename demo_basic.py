@@ -1,5 +1,4 @@
 from langchain.agents import create_agent
-from langchain.agents.structured_output import ProviderStrategy
 
 # note: pydantic v2 models currently cannot be initialized from JSON directly
 # + osw-python requires v1 models for now
@@ -8,14 +7,14 @@ from langchain.agents.structured_output import ProviderStrategy
 from opensemantic.lab.v1 import LaboratoryProcess
 
 from util import (
-    modify_schema, post_process_llm_json_response,
-    post_process_llm_json_response
+    modify_schema,
+    post_process_llm_json_response,
+    schema_to_markdown
 )
 
 import json
 
-from llm_init import llm
-from osl_init import osl_client
+from llm_init import get_response_format, llm
 
 target_data_model = LaboratoryProcess
 
@@ -28,6 +27,8 @@ prompt = (
 sys_prompt = (
     "You are an expert laboratory assistant. "
     "You always answer in valid JSON according to the provided schema. "
+    "Try to store all given information in the output. "
+    "Fill in dates and time in ISO 8601 format. "
     "If a field is not specified, leave it empty or null. "
     "Do not add any additional fields that are not defined in the schema. "
     "If you encounter a property that is annotated with a 'range', "
@@ -39,23 +40,36 @@ sys_prompt = (
 # preprocess the schema to comply
 # with https://platform.openai.com/docs/guides/structured-outputs#supported-schemas  # noqa: E501
 
-provider_strategy = ProviderStrategy(
-    schema=modify_schema(target_data_model.export_schema()),
-    strict=True
+schema_description = schema_to_markdown(
+    modify_schema(target_data_model.export_schema())
 )
+effective_response_format = get_response_format(llm, target_data_model)
 
+# llm.temperature = 0.0  # not supported by reasoning models
+if hasattr(llm, "reasoning_effort"):
+    llm.reasoning_effort = "low"
 agent = create_agent(
     model=llm,
-    response_format=provider_strategy
+    response_format=effective_response_format
 )
 
 result = agent.invoke({
-    "messages": [{
-        "role": "user",
-        "content": sys_prompt + "\n\n" + prompt
-    }]
+    "messages": [
+        {
+            "role": "system",
+            "content": sys_prompt
+        },
+        {
+            "role": "system",
+            "content": schema_description
+        },
+        {
+            "role": "user",
+            "content": prompt
+        }
+    ]
 })
-
+print(result)
 result = post_process_llm_json_response(result["structured_response"])
 
 print("Structured Response:")
