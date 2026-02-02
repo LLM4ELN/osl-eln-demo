@@ -29,6 +29,13 @@ from schema_catalog import lookup_exact_schema, get_cached_inventory
 from osl_init import lookup_excact_matching_entity
 
 
+# Cache for schema builds keyed by schema_name
+# Note: this is also a workaround for a bug in oold:
+# exporting a schema a second time fails with an error
+# the top-level $ref is not found
+_schema_build_cache: Dict[str, Any] = {}
+
+
 class CreateParam(BaseModel):
     """Parameters for creating or looking up an entity."""
     parent_id: str = "_root_"
@@ -424,24 +431,37 @@ If no match is found, return an empty string for matching_entity_id.
         schema_name = lookup_exact_schema(prompt)
         print(f"LLM returned class path: {schema_name}")
 
-        # Get the class from the path
-        schema_cls: OswBaseModel = eval(schema_name)
-
-        if schema_cls is None:
-            print(
-                f"Schema name {param.schema_name} not found in "
-                f"opensemantic modules"
-            )
-            return None
+        # Check cache first
+        if schema_name in _schema_build_cache:
+            print(f"Using cached schema for {schema_name}")
+            schema_cls = _schema_build_cache[schema_name]["schema_cls"]
+            target_schema = _schema_build_cache[schema_name]["target_schema"]
         else:
-            print(f"Found schema class for {param.schema_name}: {schema_cls}")
+            # Get the class from the path
+            schema_cls: OswBaseModel = eval(schema_name)
 
-        # Export the schema
-        try:
-            target_schema = schema_cls.export_schema()
-        except Exception as e:
-            print(f"Error exporting schema for {param.schema_name}: {e}")
-            return None
+            if schema_cls is None:
+                print(
+                    f"Schema name {param.schema_name} not found in "
+                    f"opensemantic modules"
+                )
+                return None
+            else:
+                print(f"Found schema class for {param.schema_name}: {schema_cls}")
+
+            # Export the schema
+            try:
+                target_schema = schema_cls.export_schema()
+            except Exception as e:
+                print(f"Error exporting schema for {param.schema_name}: {e}")
+                return None
+
+            # Cache the results
+            _schema_build_cache[schema_name] = {
+                "schema_cls": schema_cls,
+                "target_schema": target_schema
+            }
+            print(f"Cached schema build for {schema_name}")
 
         # Step 3: Identify fillable properties
         fillable_properties = self._identify_fillable_properties(
