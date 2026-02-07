@@ -1,14 +1,28 @@
 import json
+from typing import List, Dict, Any, Literal
 from dotenv import load_dotenv
 from os import environ
 from osw.express import OswExpress, CredentialManager, OSW
 import osw.model.entity as model
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from langchain.agents import create_agent
-
 from llm_init import get_response_format
 
 load_dotenv()
+
+
+class LookupResult(BaseModel):
+    """Result from entity lookup in vector store."""
+    osw_id: str = ""
+    """The OSW-ID of the matching entity, or empty string if no match."""
+    needs_update: bool = False
+    """True if the new description has additional info to merge."""
+    existing_data: Dict[str, Any] = Field(default_factory=dict)
+    """Existing entity data from vector store (for merge in OoldAgent)."""
+    existing_type: str = ""
+    """The type/schema of the existing entity."""
+    explanation: str = ""
+    """Explanation of the decision."""
 
 
 def get_osl_client():
@@ -159,7 +173,7 @@ def build_vector_store():
 
 def lookup_excact_matching_entity(
     vector_store, description, llm_judge=False, debug=False
-) -> str | None:
+) -> LookupResult | None:
     """lookup an entity by its description using the vector store
     and return the entity's title / ID if a good match is found.
     """
@@ -176,33 +190,29 @@ def lookup_excact_matching_entity(
                 f"  Data: {res.page_content}\n"
             )
 
+    # return if no results
+    if len(results) == 0:
+        print("No results to process.")
+        return None
     # if llm_judge is True, use LLM to judge the best match
     if llm_judge:
         from llm_init import get_llm
 
-        class ResultSchema(BaseModel):
-            osw_id: str
-            """the OSW-ID of the best matching entity,
-            or empty '' if no good match is found"""
+        # ========== STEP 1: Match Decision ==========
+        class MatchDecision(BaseModel):
+            """Result of entity matching."""
+            decision: Literal["no_match", "match", "match_with_update"]
+            osw_id: str = ""  # Empty for no_match
             explanation: str
-            """explanation of the decision"""
 
-        system_prompt = (
+        step1_prompt = (
             "Check if one of the candidate entities matches the given "
-            "description exactly by comparing all fields. "
-            "For free text fields, consider minor variations in wording "
-            "as matches. "
-            "Structured fields like ids, dates, enums, have to match "
-            "exactly. "
-            "Go over each candidate entity and compare its data to the "
-            "description. "
-            "Side by side compare each field and decide if it matches "
-            "the description. "
-            "If all match, return the matching entity's OSW-ID "
-            "(e.g. Item:OSW123..). "
-            "Return an empty OSW-ID if no good match was found."
-            "Respond in valid JSON according to the schema: "
-            "{'osw_id': str, 'explanation': str}"
+            "description. Return:\n"
+            "- 'no_match': No candidate matches the description\n"
+            "- 'match': A candidate matches exactly (no new info)\n"
+            "- 'match_with_update': A candidate matches but the description "
+            "has additional info (new fields, relationships, attributes)\n\n"
+            "Include the osw_id (e.g., 'Item:OSWxxx') for match/match_with_update."
         )
 
         candidates_str = "\n".join([
@@ -218,38 +228,76 @@ def lookup_excact_matching_entity(
         )
 
         llm = get_llm()
-        # if hasattr(llm, "reasoning_effort"):
-        #     llm.reasoning_effort = "high"
+        response_format = get_response_format(llm, target_data_model=MatchDecision)
+        agent = create_agent(model=llm, response_format=response_format)
 
-        response_format = get_response_format(
-            llm, target_data_model=ResultSchema
-        )
-        agent = create_agent(
-            model=llm,
-            response_format=response_format,
-        )
-
-        response = agent.invoke({"messages": [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": user_prompt
-            }
+        step1_response = agent.invoke({"messages": [
+            {"role": "system", "content": step1_prompt},
+            {"role": "user", "content": user_prompt}
         ]})["structured_response"]
-        print(f"LLM Judge Response: {response}")
-        response = ResultSchema.model_validate(response)
-        if not response.osw_id.startswith("Item:OSW"):
+
+        decision = MatchDecision.model_validate(step1_response)
+        print(f"Step 1 - Match Decision: {decision}")
+
+        if decision.decision == "no_match":
             return None
-        else:
-            return response.osw_id
+
+        if decision.decision == "match":
+            return LookupResult(
+                osw_id=decision.osw_id,
+                needs_update=False,
+                existing_data={},
+                existing_type="",
+                explanation=decision.explanation
+            )
+
+        # ========== match_with_update: Return existing entity data ==========
+        # Merge will be handled by OoldAgent using schema cache
+        print(f"Match with update for {decision.osw_id} - returning existing data")
+
+        # Get existing entity data
+        existing_data = None
+        existing_type = ""
+        for res, score in results:
+            if res.id == decision.osw_id:
+                content = json.loads(res.page_content)
+                existing_data = content.get("jsondata", content)
+                # Get type from the entity data
+                type_list = existing_data.get("type", [])
+                if type_list:
+                    existing_type = type_list[0] if isinstance(type_list, list) else type_list
+                break
+
+        if existing_data is None:
+            print(f"Warning: Could not find existing data for {decision.osw_id}")
+            return LookupResult(
+                osw_id=decision.osw_id,
+                needs_update=False,
+                existing_data={},
+                existing_type="",
+                explanation="Could not retrieve existing data"
+            )
+
+        print(f"   Existing type: {existing_type}")
+
+        return LookupResult(
+            osw_id=decision.osw_id,
+            needs_update=True,
+            existing_data=existing_data,
+            existing_type=existing_type,
+            explanation=decision.explanation
+        )
     else:
         # return the best match if score is above a threshold
         best_res, best_score = results[0]
         if best_score > 0.4:  # arbitrary threshold
-            return best_res.id
+            return LookupResult(
+                osw_id=best_res.id,
+                needs_update=False,
+                existing_data={},
+                existing_type="",
+                explanation="Score-based match"
+            )
         else:
             return None
 

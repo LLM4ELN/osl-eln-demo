@@ -4,7 +4,7 @@ entities."""
 import json
 import re
 import uuid
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy, ToolStrategy
@@ -26,7 +26,7 @@ from util import (
 )
 from llm_init import get_llm, model_supports_structured_output
 from schema_catalog import lookup_exact_schema, get_cached_inventory
-from osl_init import lookup_excact_matching_entity
+from osl_init import lookup_excact_matching_entity, LookupResult
 
 
 # Cache for schema builds keyed by schema_name
@@ -348,6 +348,71 @@ If no match is found, return an empty string for matching_entity_id.
         print("No matching previous request found")
         return None
 
+    def _merge_entity_data(
+        self,
+        entity_id: str,
+        existing_data: Dict[str, Any],
+        existing_type: str,
+        data_instance: OswBaseModel
+    ) -> str:
+        """Merge existing entity data with new data_instance.
+
+        When an entity in the vector store matches but the new description
+        has additional data, this method merges them using the appropriate
+        schema from the cache.
+
+        Args:
+            entity_id: ID of the existing entity to update
+            existing_data: Existing entity data from vector store
+            existing_type: The type/schema of the existing entity
+            data_instance: The newly created data instance with new fields
+
+        Returns:
+            The entity_id (entity is updated in entities dict)
+        """
+        print(f"\n>> Merging entity {entity_id}")
+        print(f"   Existing type: {existing_type}")
+
+        # Get new data from data_instance
+        new_data = json.loads(data_instance.json(exclude_none=True))
+        new_data.pop("uuid", None)  # Don't merge uuid
+        # print data dicts
+        print(f"Existing entity data: {existing_data}")
+        print(f"New data instance: {new_data}")
+        # Merge: existing_data + new_data (new overwrites existing for conflicts)
+        merged_data = {**existing_data, **new_data}
+        print(f"   Merged fields: {list(merged_data.keys())}")
+
+        # Try to find the schema class for the existing type (more specific)
+        try:
+            schema_cls = None
+
+            # Try to find schema by existing type
+            if existing_type:
+                inventory = get_cached_inventory()
+                schema_info = inventory.get_by_schema_id(existing_type)
+                if schema_info and schema_info.cls_obj:
+                    schema_cls = schema_info.cls_obj
+                    print(f"   Using schema: {schema_info.full_path}")
+
+            # Fallback to data_instance's class
+            if schema_cls is None:
+                schema_cls = data_instance.__class__
+                print(f"   Using fallback schema: {schema_cls.__name__}")
+
+            # Create entity from merged data
+            merged_entity = schema_cls(**merged_data)
+            self.entities[entity_id] = merged_entity
+            print(f"   Entity {entity_id} stored with merged data")
+
+        except Exception as e:
+            print(f"   Error creating merged entity: {e}")
+            # Fallback to storing the new data_instance
+            self.entities[entity_id] = data_instance
+            print(f"   Fallback: stored new instance for {entity_id}")
+
+        return entity_id
+
     def invoke(
         self,
         prompt: str,
@@ -495,9 +560,9 @@ If no match is found, return an empty string for matching_entity_id.
             "Do not invent any new information that is not provided in "
             "the prompt. "
             "Do not generate any dummy or placeholder values. "
-            "For properties with a 'range' annotation, provide a textual "
-            "description of the linked entity (if you have information), "
-            "not an ID. "
+            "For properties with a 'range' annotation, and you have information about them, provide a textual "
+            "description of the linked entity including all available details in this field, "
+            "not an ID of an entity. "
             "If you do not have enough information for a field, leave it "
             "empty or null. "
         )
@@ -642,14 +707,22 @@ If no match is found, return an empty string for matching_entity_id.
         data_instance_dict = remove_nulls(data_instance_dict)
         data_instance_description = json.dumps(data_instance_dict)
 
-        existing_entity = lookup_excact_matching_entity(
+        lookup_result = lookup_excact_matching_entity(
             vector_store=self.vector_store,
             description=data_instance_description,
             llm_judge=self.use_llm_judge
         )
-        if existing_entity is not None:
-            print(f"Found existing entity match: {existing_entity}")
-            return existing_entity
+        if lookup_result is not None and lookup_result.osw_id:
+            if lookup_result.needs_update:
+                return self._merge_entity_data(
+                    entity_id=lookup_result.osw_id,
+                    existing_data=lookup_result.existing_data,
+                    existing_type=lookup_result.existing_type,
+                    data_instance=data_instance
+                )
+            else:
+                print(f"Found existing entity match: {lookup_result.osw_id}")
+                return lookup_result.osw_id
 
         # Step 8: Store and return
         self.entities[data_instance.get_iri()] = data_instance

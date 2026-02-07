@@ -137,17 +137,27 @@ def model_supports_structured_output(llm: BaseChatModel, tools=None):
 
 def get_response_format(
     llm: BaseChatModel,
-    target_data_model: GenericLinkedBaseModel | BaseModel,
+    target_data_model: GenericLinkedBaseModel | BaseModel | dict,
     tools=None
 ):
     """Get the appropriate response format (ProviderStrategy or ToolStrategy)
-    based on whether the model supports structured output."""
+    based on whether the model supports structured output.
+
+    Args:
+        llm: The language model
+        target_data_model: Either a BaseModel class, GenericLinkedBaseModel,
+            or a JSON schema dict directly
+        tools: Optional tools list
+    """
     from langchain.agents.structured_output import (
         ProviderStrategy,
         ToolStrategy
     )
 
-    if issubclass(target_data_model, GenericLinkedBaseModel):
+    # Handle dict (already a JSON schema)
+    if isinstance(target_data_model, dict):
+        target_schema = target_data_model
+    elif issubclass(target_data_model, GenericLinkedBaseModel):
         target_schema = target_data_model.export_schema()
         target_schema = modify_schema(target_schema)
     else:
