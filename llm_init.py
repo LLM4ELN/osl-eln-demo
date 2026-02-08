@@ -175,11 +175,8 @@ def get_response_format(
             schema=target_schema
         )
 
-
-# create a default instance of the LLM
-llm = get_llm()
-
 if __name__ == "__main__":
+    llm = get_llm()
     print("LLM initialized:", llm)
     result = llm.invoke("Hello, world!")
     print("LLM invocation result:", result)

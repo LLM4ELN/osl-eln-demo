@@ -40,10 +40,6 @@ def get_osl_client():
     return osl_client
 
 
-# default osl_client instance
-osl_client = get_osl_client()
-
-
 def search_by_label(osl_client: OswExpress, query: str):
     result = osl_client.site.semantic_search(
         "[[HasLabel::~*" + query + "*]]"

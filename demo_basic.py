@@ -14,7 +14,7 @@ from util import (
 
 import json
 
-from llm_init import get_response_format, llm
+from llm_init import get_response_format, get_llm
 
 target_data_model = LaboratoryProcess
 
@@ -39,6 +39,8 @@ sys_prompt = (
 # based on the target data model's schema
 # preprocess the schema to comply
 # with https://platform.openai.com/docs/guides/structured-outputs#supported-schemas  # noqa: E501
+
+llm = get_llm()
 
 schema_description = schema_to_markdown(
     modify_schema(target_data_model.export_schema())
@@ -78,4 +80,4 @@ print(json.dumps(result, indent=2))
 # create an instance of the target data model from the result
 data_instance = target_data_model(**result)
 
-osl_client.store_entity(data_instance)
+# osl_client.store_entity(data_instance)
