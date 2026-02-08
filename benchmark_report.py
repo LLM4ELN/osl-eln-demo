@@ -1,0 +1,296 @@
+"""Render benchmark YAML results as a Markdown report with tables and Mermaid charts."""
+
+import argparse
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+import yaml
+
+RESULTS_DIR = Path(__file__).parent / "results"
+
+
+def load_results(path: Path) -> list:
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def find_latest_result() -> Path:
+    """Return the most recently modified .yaml file in results/."""
+    yamls = sorted(RESULTS_DIR.glob("benchmark_*.yaml"), key=lambda p: p.stat().st_mtime)
+    if not yamls:
+        print("No benchmark result files found in", RESULTS_DIR, file=sys.stderr)
+        sys.exit(1)
+    return yamls[-1]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _avg(values: list[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
+def _collect_chapter_names(data: list) -> list[str]:
+    """Collect ordered chapter names across all models and runs."""
+    seen = {}
+    for model_result in data:
+        for run in model_result["runs"]:
+            for ch in run["chapters"]:
+                name = ch["chapter_name"]
+                if name not in seen:
+                    seen[name] = len(seen)
+    return list(seen.keys())
+
+
+def _short_chapter(name: str) -> str:
+    """Shorten 'Chapter 1: Experiment #1' to 'Ch1'."""
+    if name.startswith("Chapter "):
+        num = name.split(":")[0].replace("Chapter ", "")
+        return f"Ch{num}"
+    return name[:8]
+
+
+def _build_chart_labels(data: list) -> list[str]:
+    """Return sanitized model names for Mermaid x-axis labels."""
+    # Use non-breaking hyphen so Mermaid doesn't parse hyphens as minus
+    return [m["model"].replace("-", "‑") for m in data]
+
+
+MERMAID_CHART = "xychart-beta horizontal"
+
+
+def _mermaid_x_axis(labels: list[str]) -> str:
+    """Build a Mermaid x-axis line with quoted labels."""
+    quoted = ['"' + l + '"' for l in labels]
+    return "  x-axis [" + ", ".join(quoted) + "]"
+
+
+# ---------------------------------------------------------------------------
+# Report sections
+# ---------------------------------------------------------------------------
+
+def render_header(data: list, source_path: Path) -> str:
+    n_models = len(data)
+    run_counts = [len(m["runs"]) for m in data]
+    max_runs = max(run_counts) if run_counts else 0
+    return (
+        f"# Benchmark Report\n\n"
+        f"- **Source:** `{source_path.name}`\n"
+        f"- **Models:** {n_models}\n"
+        f"- **Runs per model:** {max_runs}\n"
+    )
+
+
+def render_summary_table(data: list) -> str:
+    lines = [
+        "## Summary\n",
+        "| Model | Passed | Avg Errors | Avg Time (s) |",
+        "|---|---|---|---|",
+    ]
+    for m in data:
+        model = m["model"]
+        runs = m["runs"]
+        if not runs:
+            lines.append(f"| {model} | 0/0 | — | — |")
+            continue
+        n = len(runs)
+        pass_count = sum(1 for r in runs if r["passed"])
+        avg_errors = _avg([r["total_errors"] for r in runs])
+        avg_time = _avg([r["total_time"] for r in runs])
+        lines.append(f"| {model} | {pass_count}/{n} | {avg_errors:.1f} | {avg_time:.1f} |")
+    return "\n".join(lines) + "\n"
+
+
+def render_chapter_table(data: list, chapter_names: list[str]) -> str:
+    short_names = [_short_chapter(n) for n in chapter_names]
+    header_parts = ["Model"] + [f"{s} Errors" for s in short_names] + [f"{s} Time" for s in short_names]
+    sep_parts = ["---"] * len(header_parts)
+    lines = [
+        "## Per-Chapter Breakdown\n",
+        "| " + " | ".join(header_parts) + " |",
+        "| " + " | ".join(sep_parts) + " |",
+    ]
+    for m in data:
+        model = m["model"]
+        runs = m["runs"]
+        if not runs:
+            lines.append("| " + model + " | " + " | ".join(["—"] * (len(chapter_names) * 2)) + " |")
+            continue
+        err_cells = []
+        time_cells = []
+        for ch_name in chapter_names:
+            ch_errors = []
+            ch_times = []
+            for run in runs:
+                for ch in run["chapters"]:
+                    if ch["chapter_name"] == ch_name:
+                        ch_errors.append(len(ch["errors"]))
+                        ch_times.append(ch["elapsed_time"])
+                        break
+            if ch_errors:
+                err_cells.append(f"{_avg(ch_errors):.1f}")
+                time_cells.append(f"{_avg(ch_times):.1f}")
+            else:
+                err_cells.append("—")
+                time_cells.append("—")
+        row = [model] + err_cells + time_cells
+        lines.append("| " + " | ".join(row) + " |")
+    return "\n".join(lines) + "\n"
+
+
+def render_error_type_table(data: list) -> str:
+    type_counts: dict[str, int] = defaultdict(int)
+    type_models: dict[str, set] = defaultdict(set)
+    for m in data:
+        for run in m["runs"]:
+            for ch in run["chapters"]:
+                for err in ch["errors"]:
+                    et = err["error_type"]
+                    type_counts[et] += 1
+                    type_models[et].add(m["model"])
+    if not type_counts:
+        return "## Error Type Distribution\n\nNo errors recorded.\n"
+    lines = [
+        "## Error Type Distribution\n",
+        "| Error Type | Count | Models Affected |",
+        "|---|---|---|",
+    ]
+    for et, count in sorted(type_counts.items(), key=lambda x: -x[1]):
+        models = ", ".join(sorted(type_models[et]))
+        lines.append(f"| `{et}` | {count} | {models} |")
+    return "\n".join(lines) + "\n"
+
+
+def render_errors_chart(data: list, labels: list[str]) -> str:
+    values = []
+    for m in data:
+        runs = m["runs"]
+        values.append(_avg([r["total_errors"] for r in runs]) if runs else 0)
+    lines = [
+        "## Errors per Model\n",
+        "```mermaid",
+        MERMAID_CHART,
+        '  title "Errors per Model"',
+        _mermaid_x_axis(labels),
+        '  y-axis "Errors"',
+        f'  bar [{", ".join(f"{v:.1f}" for v in values)}]',
+        "```\n",
+    ]
+    return "\n".join(lines)
+
+
+def render_time_chart(data: list, labels: list[str]) -> str:
+    values = []
+    for m in data:
+        runs = m["runs"]
+        values.append(_avg([r["total_time"] for r in runs]) if runs else 0)
+    lines = [
+        "## Time per Model\n",
+        "```mermaid",
+        MERMAID_CHART,
+        '  title "Total Time per Model (s)"',
+        _mermaid_x_axis(labels),
+        '  y-axis "Seconds"',
+        f'  bar [{", ".join(f"{v:.1f}" for v in values)}]',
+        "```\n",
+    ]
+    return "\n".join(lines)
+
+
+def render_chapter_errors_chart(
+    data: list, chapter_names: list[str], labels: list[str]
+) -> str:
+    short_names = [_short_chapter(n) for n in chapter_names]
+    lines = [
+        "## Errors per Chapter\n",
+        "```mermaid",
+        MERMAID_CHART,
+        '  title "Errors per Chapter"',
+        _mermaid_x_axis(labels),
+        '  y-axis "Errors"',
+    ]
+    for ch_idx, ch_name in enumerate(chapter_names):
+        values = []
+        for m in data:
+            ch_errors = []
+            for run in m["runs"]:
+                for ch in run["chapters"]:
+                    if ch["chapter_name"] == ch_name:
+                        ch_errors.append(len(ch["errors"]))
+                        break
+            values.append(_avg(ch_errors) if ch_errors else 0)
+        lines.append(f'  bar [{", ".join(f"{v:.1f}" for v in values)}]')
+    lines.append("```\n")
+    # Add legend since xychart-beta doesn't label multiple bars
+    bar_legend = " / ".join(f"Bar {i+1} = {s}" for i, s in enumerate(short_names))
+    lines.append(f"*{bar_legend}*\n")
+    return "\n".join(lines)
+
+
+def render_detailed_errors(data: list) -> str:
+    sections = ["## Detailed Errors\n"]
+    for m in data:
+        model = m["model"]
+        total_errors = 0
+        for run in m["runs"]:
+            total_errors += run["total_errors"]
+        if total_errors == 0:
+            sections.append(f"### {model}\n\nNo errors.\n")
+            continue
+        sections.append(f"### {model}\n")
+        for run_idx, run in enumerate(m["runs"]):
+            if len(m["runs"]) > 1:
+                sections.append(f"**Run {run_idx + 1}** — {'PASS' if run['passed'] else 'FAIL'}, "
+                                f"{run['total_errors']} errors, {run['total_time']:.1f}s\n")
+            if run.get("error_message"):
+                sections.append(f"> Run-level error: {run['error_message']}\n")
+            for ch in run["chapters"]:
+                if not ch["errors"]:
+                    continue
+                sections.append(f"**{ch['chapter_name']}** ({ch['elapsed_time']:.1f}s)\n")
+                for err in ch["errors"]:
+                    sections.append(f"- `{err['error_type']}`: {err['message']}")
+                sections.append("")
+    return "\n".join(sections) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def generate_report(data: list, source_path: Path) -> str:
+    chapter_names = _collect_chapter_names(data)
+    labels = _build_chart_labels(data)
+    parts = [
+        render_header(data, source_path),
+        render_summary_table(data),
+        render_errors_chart(data, labels),
+        render_time_chart(data, labels),
+        render_chapter_errors_chart(data, chapter_names, labels),
+        render_chapter_table(data, chapter_names),
+        render_error_type_table(data),
+        render_detailed_errors(data),
+    ]
+    return "\n".join(parts)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate Markdown report from benchmark YAML results.")
+    parser.add_argument("result_file", nargs="?", type=Path, default=None,
+                        help="Path to benchmark YAML file (default: latest in results/)")
+    args = parser.parse_args()
+
+    source = args.result_file or find_latest_result()
+    data = load_results(source)
+    report = generate_report(data, source)
+
+    out_path = source.with_suffix(".md")
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(report)
+    print(out_path)
+
+
+if __name__ == "__main__":
+    main()

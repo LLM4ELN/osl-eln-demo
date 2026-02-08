@@ -1,20 +1,22 @@
 benchmark:
-  runs: 1
+  runs: 3
   timeout: 900  # seconds per run
   parallel_models: true
   parallel_runs: true
   models:  # references model_name values from model_list
     - claude-sonnet-4-5
-    #- claude-haiku-4-5
-    #- claude-opus-4-5
-    #- deepseek-v3.2
+    - claude-haiku-4-5
+    - claude-opus-4-5
+    - deepseek-v3.2
     - cohere-command-a
     - llama-4-maverick-17b-128e-instruct-fp8
-    #- kimi-k2.5
-    #- kimi-k2-thinking
-    #- gpt-5.2-chat
-    #- gpt-5-nano
+    - kimi-k2.5
+    - kimi-k2-thinking
+    - gpt-5.2-chat
+    - gpt-5-nano
     - gpt-5-mini
+    - mistral-large-3
+    # - mistral-small-2503
 
 # model configurations based on https://docs.litellm.ai/docs/proxy/configs
 model_list:
@@ -77,15 +79,7 @@ model_list:
     provider: azure-foundry
     comment: "struggles with fillable properties"
 
-  - model_name: mistral-large-3
-    litellm_params:
-      model: mistral-large-3
-      api_base: os.environ/API_ENDPOINT
-      api_key: os.environ/API_KEY
-    provider: azure-foundry
-    comment: "error: invalid input"
-
-  - model_name: llama-4-maverick-17b-128e-instruct-fp8
+  - model_name: llama-4-maverick
     litellm_params:
       model: llama-4-maverick-17b-128e-instruct-fp8
       api_base: os.environ/API_ENDPOINT
@@ -128,3 +122,20 @@ model_list:
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
     provider: azure-foundry
+
+  - model_name: mistral-large-3
+    litellm_params:
+      model: mistral-large-3
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry-mistral
+    comment: "error: invalid input"
+
+  - model_name: mistral-small-2503
+    litellm_params:
+      model: mistral-small-2503
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+      api_version: "2024-06-01"
+    provider: azure-foundry-mistral
+    comment: "error: 'tool_choice' does not support" 

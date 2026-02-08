@@ -35,6 +35,16 @@ def get_llm():
                 "x-ms-api-version": environ.get("API_VERSION", "2024-02-15")
             }
         )
+        
+    # azure-foundry-mistral
+    if environ.get("API_PROVIDER") == "azure-foundry-mistral":
+        # Azure AI Foundry with Mistral
+        from langchain_mistralai.chat_models import ChatMistralAI
+        llm = ChatMistralAI(
+            model=environ.get("API_MODEL"),  # e.g., mistral-large-3
+            api_key=environ.get("API_KEY"),
+            base_url=environ.get("API_ENDPOINT"),
+        )    
 
     if environ.get("API_PROVIDER") == "azure-foundry":
         from langchain_openai import ChatOpenAI

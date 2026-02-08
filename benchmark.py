@@ -5,9 +5,10 @@ import os
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 import yaml
 
@@ -856,6 +857,22 @@ def print_comparison(all_results: List[ModelBenchmarkResult]):
     print("\n" + "=" * 70)
 
 
+RESULTS_DIR = Path(__file__).parent / "results"
+
+
+def export_results(all_results: List[ModelBenchmarkResult]) -> Path:
+    """Export benchmark results to a timestamped YAML file under ./results."""
+    RESULTS_DIR.mkdir(exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+    path = RESULTS_DIR / f"benchmark_{timestamp}.yaml"
+    data = [asdict(r) for r in all_results]
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+    print(f"\nResults exported to {path}")
+    return path
+
+
 if __name__ == "__main__":
     all_results = run_model_comparison()
     print_comparison(all_results)
+    export_results(all_results)
