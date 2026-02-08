@@ -633,6 +633,8 @@ If no match is found, return an empty string for matching_entity_id.
             print(json.dumps(result, indent=2))
 
             try:
+                # Validate result against schema class before accepting
+                schema_cls(**result)
                 break
             except Exception as e:
                 print(f"Error in response format: {e}")
