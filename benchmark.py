@@ -1,12 +1,67 @@
 """Benchmark for OoldAgent using the demo playbook test cases."""
 
 import json
+import os
 import time
+import traceback
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 
+import yaml
+
 from oold_agent import OoldAgent
 from schema_catalog import get_cached_inventory
+
+
+CONFIG_FILE = Path(__file__).parent / "benchmark_config.yaml"
+
+# Mapping from litellm_params keys to environment variable names
+_LITELLM_ENV_MAPPING = {
+    "model": "API_MODEL",
+    "api_base": "API_ENDPOINT",
+    "api_key": "API_KEY",
+    "api_version": "API_VERSION",
+}
+
+
+def _resolve_env_ref(value: str) -> str:
+    """Resolve 'os.environ/VAR_NAME' references to actual env var values."""
+    if isinstance(value, str) and value.startswith("os.environ/"):
+        var_name = value[len("os.environ/"):]
+        return os.environ.get(var_name, "")
+    return value
+
+
+def load_benchmark_config(path: Path = CONFIG_FILE) -> Dict[str, Any]:
+    """Load benchmark configuration from YAML file.
+
+    The YAML has two root keys: ``benchmark`` (run settings + selected model
+    names) and ``model_list`` (full LiteLLM-style model catalog).  Only models
+    whose ``model_name`` appears in ``benchmark.models`` are returned.
+    """
+    with open(path, encoding="utf-8") as f:
+        raw = yaml.safe_load(f)
+    benchmark = raw["benchmark"]
+    model_list = raw.get("model_list", [])
+    catalog = {m["model_name"]: m for m in model_list}
+    selected_names = benchmark.get("models", list(catalog.keys()))
+    benchmark["models"] = [
+        catalog[name] for name in selected_names if name in catalog
+    ]
+    return benchmark
+
+
+def _apply_model_config(model_config: Dict[str, Any]):
+    """Set environment variables from a LiteLLM-style model config dict."""
+    params = model_config.get("litellm_params", {})
+    for param_key, env_var in _LITELLM_ENV_MAPPING.items():
+        if param_key in params:
+            os.environ[env_var] = _resolve_env_ref(str(params[param_key]))
+    # provider lives outside litellm_params
+    if "provider" in model_config:
+        os.environ["API_PROVIDER"] = model_config["provider"]
 
 
 @dataclass
@@ -54,7 +109,17 @@ class BenchmarkResult:
     """Overall benchmark results."""
     chapters: List[ChapterResult] = field(default_factory=list)
     total_errors: int = 0
+    total_time: float = 0.0
     passed: bool = True
+    error_message: Optional[str] = None
+    """Set when the entire run crashed with an unhandled exception."""
+
+
+@dataclass
+class ModelBenchmarkResult:
+    """Results from all runs of a single model."""
+    model: str
+    runs: List[BenchmarkResult] = field(default_factory=list)
 
 
 # Test cases from the playbook
@@ -437,55 +502,71 @@ def run_benchmark(verbose: bool = True) -> BenchmarkResult:
 
         chapter_start = time.time()
 
-        # Invoke the agent
-        entity_id = agent.invoke(prompt=chapter.prompt)
+        try:
+            # Invoke the agent
+            entity_id = agent.invoke(prompt=chapter.prompt)
 
-        chapter_elapsed = time.time() - chapter_start
+            chapter_elapsed = time.time() - chapter_start
 
-        if entity_id is None:
+            if entity_id is None:
+                chapter_result = ChapterResult(chapter_name=chapter.name)
+                chapter_result.errors.append(ValidationError(
+                    chapter=chapter.name,
+                    error_type="INVOKE_FAILED",
+                    message="Failed to create entity"
+                ))
+                chapter_result.elapsed_time = chapter_elapsed
+                result.chapters.append(chapter_result)
+                continue
+
+            # Validate chapter
+            chapter_result = validate_chapter(
+                chapter, agent, all_entity_ids
+            )
+            chapter_result.elapsed_time = chapter_elapsed
+
+            if verbose:
+                print(f"\nCreated: {len(chapter_result.entities_created)}")
+                for e in chapter_result.entities_created:
+                    print(f"  - {e['class']}: {e['fields']}")
+
+                print(f"Reused: {len(chapter_result.entities_reused)}")
+                for eid in chapter_result.entities_reused:
+                    print(f"  - {eid}")
+
+                print(f"Modified: {len(chapter_result.entities_modified)}")
+                for e in chapter_result.entities_modified:
+                    print(f"  - {e['class']}: {e['expected_fields_after']}")
+
+                if chapter_result.errors:
+                    print(f"\nErrors: {len(chapter_result.errors)}")
+                    for err in chapter_result.errors:
+                        print(f"  [{err.error_type}] {err.message}")
+
+            # Store entities in vector store for next chapter
+            agent.store_entities()
+
+            # Update tracking
+            all_entity_ids.update(agent.entities.keys())
+            result.chapters.append(chapter_result)
+
+            # Clear agent state for next chapter
+            agent.clear()
+
+        except Exception:
+            chapter_elapsed = time.time() - chapter_start
+            tb = traceback.format_exc()
+            print(f"\n  EXCEPTION in {chapter.name}:\n{tb}")
             chapter_result = ChapterResult(chapter_name=chapter.name)
+            chapter_result.elapsed_time = chapter_elapsed
             chapter_result.errors.append(ValidationError(
                 chapter=chapter.name,
-                error_type="INVOKE_FAILED",
-                message="Failed to create entity"
+                error_type="EXCEPTION",
+                message=tb.splitlines()[-1],
+                details={"traceback": tb},
             ))
-            chapter_result.elapsed_time = chapter_elapsed
             result.chapters.append(chapter_result)
-            continue
-
-        # Validate chapter
-        chapter_result = validate_chapter(
-            chapter, agent, all_entity_ids
-        )
-        chapter_result.elapsed_time = chapter_elapsed
-
-        if verbose:
-            print(f"\nCreated: {len(chapter_result.entities_created)}")
-            for e in chapter_result.entities_created:
-                print(f"  - {e['class']}: {e['fields']}")
-
-            print(f"Reused: {len(chapter_result.entities_reused)}")
-            for eid in chapter_result.entities_reused:
-                print(f"  - {eid}")
-
-            print(f"Modified: {len(chapter_result.entities_modified)}")
-            for e in chapter_result.entities_modified:
-                print(f"  - {e['class']}: {e['expected_fields_after']}")
-
-            if chapter_result.errors:
-                print(f"\nErrors: {len(chapter_result.errors)}")
-                for err in chapter_result.errors:
-                    print(f"  [{err.error_type}] {err.message}")
-
-        # Store entities in vector store for next chapter
-        agent.store_entities()
-
-        # Update tracking
-        all_entity_ids.update(agent.entities.keys())
-        result.chapters.append(chapter_result)
-
-        # Clear agent state for next chapter
-        agent.clear()
+            break  # chapters depend on each other, no point continuing
 
     # Calculate totals
     for chapter in result.chapters:
@@ -493,9 +574,9 @@ def run_benchmark(verbose: bool = True) -> BenchmarkResult:
 
     result.passed = result.total_errors == 0
 
-    total_elapsed = time.time() - total_start
+    result.total_time = time.time() - total_start
     if verbose:
-        print(f"\nTotal benchmark time: {total_elapsed:.2f}s")
+        print(f"\nTotal benchmark time: {result.total_time:.2f}s")
 
     return result
 
@@ -541,6 +622,240 @@ def print_summary(result: BenchmarkResult):
     print("="*60)
 
 
+def _collect_future_result(
+    future, idx: int, timeout: float
+) -> BenchmarkResult:
+    """Collect a benchmark future's result, handling exceptions and timeouts."""
+    try:
+        return future.result(timeout=timeout)
+    except TimeoutError:
+        future.cancel()
+        msg = f"Run timed out after {timeout:.0f}s"
+        print(f"\n--- Run {idx + 1} TIMED OUT ({timeout:.0f}s) ---")
+        return BenchmarkResult(passed=False, error_message=msg)
+    except Exception:
+        tb = traceback.format_exc()
+        print(f"\n--- Run {idx + 1} CRASHED:\n{tb}")
+        return BenchmarkResult(
+            passed=False,
+            error_message=tb.splitlines()[-1],
+        )
+
+
+def _run_benchmarks_for_model(
+    model_config: Dict[str, Any],
+    n_runs: int,
+    run_runs_parallel: bool,
+    verbose: bool,
+    run_timeout: float = 600,
+) -> ModelBenchmarkResult:
+    """Run all benchmark repetitions for a single model.
+
+    When run_runs_parallel is True, the n_runs repetitions execute
+    concurrently in threads (safe because they all share the same
+    API_MODEL value).
+    """
+    _apply_model_config(model_config)
+    model = model_config["model_name"]
+    model_result = ModelBenchmarkResult(model=model)
+
+    if run_runs_parallel:
+        executor = ThreadPoolExecutor(max_workers=n_runs)
+        futures = {
+            executor.submit(run_benchmark, verbose=verbose): i
+            for i in range(n_runs)
+        }
+        indexed: Dict[int, BenchmarkResult] = {}
+        try:
+            for future in as_completed(futures, timeout=run_timeout):
+                idx = futures[future]
+                try:
+                    r = future.result()
+                except Exception:
+                    tb = traceback.format_exc()
+                    print(f"\n--- Run {idx + 1} CRASHED:\n{tb}")
+                    r = BenchmarkResult(
+                        passed=False,
+                        error_message=tb.splitlines()[-1],
+                    )
+                indexed[idx] = r
+                status = "PASS" if r.passed else "FAIL"
+                print(
+                    f"--- Run {idx + 1} finished: {status}, "
+                    f"{r.total_errors} errors, "
+                    f"{r.total_time:.2f}s ---"
+                )
+        except TimeoutError:
+            for future, idx in futures.items():
+                if idx not in indexed:
+                    future.cancel()
+                    msg = f"Run timed out after {run_timeout:.0f}s"
+                    print(
+                        f"\n--- Run {idx + 1} TIMED OUT "
+                        f"({run_timeout:.0f}s) ---"
+                    )
+                    indexed[idx] = BenchmarkResult(
+                        passed=False, error_message=msg
+                    )
+        executor.shutdown(wait=False, cancel_futures=True)
+        for i in range(n_runs):
+            model_result.runs.append(indexed[i])
+    else:
+        for run_idx in range(n_runs):
+            print(f"\n--- Run {run_idx + 1}/{n_runs} for {model} ---")
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(run_benchmark, verbose=verbose)
+            result = _collect_future_result(
+                future, run_idx, run_timeout
+            )
+            executor.shutdown(wait=False, cancel_futures=True)
+            model_result.runs.append(result)
+            status = "PASS" if result.passed else "FAIL"
+            print(
+                f"--- Run {run_idx + 1} finished: {status}, "
+                f"{result.total_errors} errors, "
+                f"{result.total_time:.2f}s ---"
+            )
+
+    return model_result
+
+
+def _run_benchmarks_for_model_packed(args):
+    """Unpacking wrapper so ProcessPoolExecutor.map() can pass a tuple."""
+    return _run_benchmarks_for_model(*args)
+
+
+def run_model_comparison(
+    config: Optional[Dict[str, Any]] = None,
+    verbose: bool = False,
+) -> List[ModelBenchmarkResult]:
+    """Run the benchmark for each model defined in the config.
+
+    Args:
+        config: Benchmark configuration dict (loaded from YAML).
+            If None, loads from the default config file.
+        verbose: Print detailed per-chapter output for each run.
+    """
+    if config is None:
+        config = load_benchmark_config()
+
+    model_configs = config["models"]
+    n_runs = config.get("runs", 3)
+    run_timeout = config.get("timeout", 600)
+    run_models_parallel = config.get("parallel_models", False)
+    run_runs_parallel = config.get("parallel_runs", False)
+
+    if run_models_parallel:
+        with ProcessPoolExecutor(max_workers=len(model_configs)) as executor:
+            future_to_model = {
+                executor.submit(
+                    _run_benchmarks_for_model_packed,
+                    (mc, n_runs, run_runs_parallel, verbose, run_timeout),
+                ): mc["model_name"]
+                for mc in model_configs
+            }
+            results_by_model: Dict[str, ModelBenchmarkResult] = {}
+            for future in as_completed(future_to_model):
+                model = future_to_model[future]
+                try:
+                    results_by_model[model] = future.result()
+                except Exception:
+                    tb = traceback.format_exc()
+                    print(f"\n### MODEL {model} CRASHED:\n{tb}")
+                    results_by_model[model] = ModelBenchmarkResult(
+                        model=model
+                    )
+            # preserve original model order
+            all_results = [
+                results_by_model[mc["model_name"]] for mc in model_configs
+            ]
+    else:
+        all_results = []
+        for mc in model_configs:
+            model = mc["model_name"]
+            print(f"\n{'#'*60}")
+            print(f"# MODEL: {model}")
+            print(f"{'#'*60}")
+            try:
+                model_result = _run_benchmarks_for_model(
+                    mc, n_runs, run_runs_parallel, verbose, run_timeout
+                )
+            except Exception:
+                tb = traceback.format_exc()
+                print(f"\n### MODEL {model} CRASHED:\n{tb}")
+                model_result = ModelBenchmarkResult(model=model)
+            all_results.append(model_result)
+
+    return all_results
+
+
+def print_comparison(all_results: List[ModelBenchmarkResult]):
+    """Print a comparison table of all models and runs."""
+    print("\n" + "=" * 70)
+    print("MODEL COMPARISON")
+    print("=" * 70)
+
+    for model_result in all_results:
+        runs = model_result.runs
+        n = len(runs)
+
+        print(f"\nModel: {model_result.model}")
+
+        if n == 0:
+            print("  No completed runs (all crashed)")
+            continue
+
+        pass_count = sum(1 for r in runs if r.passed)
+        error_counts = [r.total_errors for r in runs]
+        times = [r.total_time for r in runs]
+        avg_errors = sum(error_counts) / n
+        avg_time = sum(times) / n
+
+        crashed = [r for r in runs if r.error_message]
+        if crashed:
+            print(f"  Runs: {n}, Passed: {pass_count}/{n}, "
+                  f"Crashed: {len(crashed)}/{n}")
+        else:
+            print(f"  Runs: {n}, Passed: {pass_count}/{n}")
+        print(
+            f"  Errors per run: {error_counts}  "
+            f"(avg {avg_errors:.1f})"
+        )
+        print(
+            f"  Time per run:   "
+            f"{', '.join(f'{t:.2f}s' for t in times)}  "
+            f"(avg {avg_time:.2f}s)"
+        )
+
+        # Per-chapter breakdown across runs
+        num_chapters = len(CHAPTERS)
+        for ch_idx in range(num_chapters):
+            ch_name = CHAPTERS[ch_idx].name
+            ch_errors = []
+            ch_times = []
+            for r in runs:
+                if ch_idx < len(r.chapters):
+                    ch = r.chapters[ch_idx]
+                    ch_errors.append(len(ch.errors))
+                    ch_times.append(ch.elapsed_time)
+                else:
+                    ch_errors.append(-1)
+                    ch_times.append(0.0)
+
+            ch_avg_err = sum(e for e in ch_errors if e >= 0) / max(
+                sum(1 for e in ch_errors if e >= 0), 1
+            )
+            ch_pass = sum(1 for e in ch_errors if e == 0)
+            print(
+                f"    {ch_name}: "
+                f"pass {ch_pass}/{n}, "
+                f"errors {ch_errors} (avg {ch_avg_err:.1f}), "
+                f"time {', '.join(f'{t:.1f}s' for t in ch_times)}"
+            )
+
+    print("\n" + "=" * 70)
+
+
 if __name__ == "__main__":
-    result = run_benchmark(verbose=True)
-    print_summary(result)
+    all_results = run_model_comparison()
+    print_comparison(all_results)

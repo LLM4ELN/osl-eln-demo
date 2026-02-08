@@ -1,0 +1,130 @@
+benchmark:
+  runs: 1
+  timeout: 900  # seconds per run
+  parallel_models: true
+  parallel_runs: true
+  models:  # references model_name values from model_list
+    - claude-sonnet-4-5
+    #- claude-haiku-4-5
+    #- claude-opus-4-5
+    #- deepseek-v3.2
+    - cohere-command-a
+    - llama-4-maverick-17b-128e-instruct-fp8
+    #- kimi-k2.5
+    #- kimi-k2-thinking
+    #- gpt-5.2-chat
+    #- gpt-5-nano
+    - gpt-5-mini
+
+# model configurations based on https://docs.litellm.ai/docs/proxy/configs
+model_list:
+  - model_name: claude-sonnet-4-5
+    litellm_params:
+      model: claude-sonnet-4-5
+      api_base: os.environ/ANTHROPIC_API_ENDPOINT
+      api_key: os.environ/API_KEY
+      api_version: "2024-02-15"
+    provider: azure-foundry-anthropic
+    comment: works
+
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: claude-haiku-4-5
+      api_base: os.environ/ANTHROPIC_API_ENDPOINT
+      api_key: os.environ/API_KEY
+      api_version: "2024-02-15"
+    provider: azure-foundry-anthropic
+    comment: works
+
+  - model_name: claude-opus-4-5
+    litellm_params:
+      model: claude-opus-4-5
+      api_base: os.environ/ANTHROPIC_API_ENDPOINT
+      api_key: os.environ/API_KEY
+      api_version: "2024-02-15"
+    provider: azure-foundry-anthropic
+    comment: works
+
+  - model_name: deepseek-v3.2-speciale
+    litellm_params:
+      model: deepseek-v3.2-speciale
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry
+    comment: "error: timeout"
+
+  - model_name: deepseek-v3.2
+    litellm_params:
+      model: deepseek-v3.2
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry
+    comment: works
+
+  - model_name: cohere-command-a
+    litellm_params:
+      model: cohere-command-a
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry
+    comment: works
+
+  - model_name: deepseek-r1-0528
+    litellm_params:
+      model: deepseek-r1-0528
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry
+    comment: "struggles with fillable properties"
+
+  - model_name: mistral-large-3
+    litellm_params:
+      model: mistral-large-3
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry
+    comment: "error: invalid input"
+
+  - model_name: llama-4-maverick-17b-128e-instruct-fp8
+    litellm_params:
+      model: llama-4-maverick-17b-128e-instruct-fp8
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry
+    comment: works
+
+  - model_name: kimi-k2.5
+    litellm_params:
+      model: kimi-k2.5
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry
+
+  - model_name: kimi-k2-thinking
+    litellm_params:
+      model: kimi-k2-thinking
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry
+    comment: works
+
+  - model_name: gpt-5.2-chat
+    litellm_params:
+      model: gpt-5.2-chat
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry
+
+  - model_name: gpt-5-nano
+    litellm_params:
+      model: gpt-5-nano
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry
+
+  - model_name: gpt-5-mini
+    litellm_params:
+      model: gpt-5-mini
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+    provider: azure-foundry
