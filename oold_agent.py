@@ -588,9 +588,16 @@ If no match is found, return an empty string for matching_entity_id.
             "Do not invent any new information that is not provided in "
             "the prompt. "
             "Do not generate any dummy or placeholder values. "
-            "For properties with a 'range' annotation, and you have information about them, provide a textual "
-            "description of the linked entity including all available details in this field, "
-            "not an ID of an entity. "
+            "IMPORTANT: For properties with a 'range' annotation, "
+            "provide a COMPLETE textual description of the linked entity "
+            "including ALL available details "
+            "in that single field. Do NOT spread information about a linked entity "
+            "across multiple fields of the parent — put everything that belongs to "
+            "the linked entity into the range property description. "
+            "For example, if a parent entity 'a' has a linked entity 'b' "
+            "and you have information about the property x of 'b', "
+            "then you should include that information in the description of b "
+            "and not put it into a property of 'a'. "
             "If you do not have enough information for a field, leave it "
             "empty or null. "
         )
@@ -665,8 +672,9 @@ If no match is found, return an empty string for matching_entity_id.
                 schema_cls(**result)
                 break
             except Exception as e:
-                print(f"Error in response format: {e}")
-                user_prompt += f"\n\nThe previous response had an error: {e}"
+                e_msg = str(e)
+                print(f"Error in response format: {e_msg}")
+                user_prompt += f"\n\nThe previous response had an error: {e_msg}"
                 retry_count += 1
                 if retry_count >= max_retries:
                     print("Max retries reached, aborting.")
