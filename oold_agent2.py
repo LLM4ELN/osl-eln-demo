@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy, ToolStrategy
+from langchain_core.documents import Document
 from pydantic import BaseModel, Field
 
 from opensemantic.v1 import OswBaseModel
@@ -22,11 +23,19 @@ import opensemantic.lab.v1   # noqa: F401 needed for eval
 
 from llm_init import get_llm, model_supports_structured_output
 from oold_agent import _schema_build_cache
+from osl_init import lookup_excact_matching_entity
+from rag_init import get_vector_store
 from schema_catalog import (
     get_cached_inventory,
     get_data_schema_inventory_markdown,
 )
-from util import modify_schema, post_process_llm_json_response, deep_copy
+from util import (
+    modify_schema,
+    post_process_llm_json_response,
+    deep_copy,
+    remove_empty,
+    remove_nulls,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -164,8 +173,9 @@ identify ALL distinct entities mentioned and map each to the most appropriate \
 data model schema.
 
 ## Rules
-1. Use the MOST SPECIFIC schema available (e.g. \
-'opensemantic.core.v1.Person' for a person, not 'opensemantic.core.v1.Entity').
+1. Use the SPECIFIC AS NEEDED BUT GENERIC AS POSSIBLE schema available, e.g. \
+'opensemantic.core.v1.Person' for a normal person, not 'opensemantic.core.v1.Entity' (too generic) \
+and not 'opensemantic.lab.v1.Researcher' if the description is generic). \
 2. Use the MINIMAL number of entities needed — do not create redundant entities.
 3. Place information in the most specific property available. For example, \
 an address belongs in the 'postal_address' property, not in 'description'.
@@ -207,13 +217,24 @@ class SegmentationAgent(BaseModel):
     in a single LLM call.
     """
 
+    vector_store: Optional[Any] = None
+    """Vector store for entity lookup. If None, builds one on first use."""
+
     llm: Optional[Any] = None
     """Language model to use. If None, uses default from get_llm()."""
+
+    use_llm_judge: bool = True
+    """Whether to use LLM judge for entity comparison."""
 
     entities: Dict[str, Any] = Field(default_factory=dict)
     """Constructed OswBaseModel instances keyed by IRI."""
 
     model_config = {"arbitrary_types_allowed": True}
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        if self.vector_store is None:
+            object.__setattr__(self, 'vector_store', get_vector_store())
 
     def _get_llm(self):
         """Get the LLM, creating one if needed."""
@@ -579,20 +600,167 @@ class SegmentationAgent(BaseModel):
 
         # Step 6: Construct OswBaseModel instances
         print("\n>> Constructing final entities...")
+        seg_to_iri: Dict[str, str] = {}
         for seg_id, (result_dict, schema_cls) in results.items():
             try:
                 instance = schema_cls(**result_dict)
                 iri = instance.get_iri()
                 self.entities[iri] = instance
+                seg_to_iri[seg_id] = iri
                 print(f"  [{seg_id}] -> {iri}")
             except Exception as e:
                 print(f"  Error constructing [{seg_id}]: {e}")
+
+        # Step 7: Deduplicate against vector store
+        print("\n>> Deduplicating against stored entities...")
+        iri_remap: Dict[str, str] = {}
+
+        for seg_id, iri in list(seg_to_iri.items()):
+            entity = self.entities.get(iri)
+            if entity is None:
+                continue
+
+            data_dict = json.loads(entity.json())
+            data_dict.pop("uuid", None)
+            data_dict = remove_empty(data_dict)
+            data_dict = remove_nulls(data_dict)
+            description = json.dumps(data_dict)
+
+            lookup_result = lookup_excact_matching_entity(
+                vector_store=self.vector_store,
+                description=description,
+                llm_judge=self.use_llm_judge,
+            )
+
+            if lookup_result is not None and lookup_result.osw_id:
+                if lookup_result.needs_update:
+                    self._merge_entity_data(
+                        entity_id=lookup_result.osw_id,
+                        existing_data=lookup_result.existing_data,
+                        existing_type=lookup_result.existing_type,
+                        data_instance=entity,
+                    )
+                    if iri != lookup_result.osw_id:
+                        self.entities.pop(iri, None)
+                        iri_remap[iri] = lookup_result.osw_id
+                else:
+                    print(
+                        f"  Reusing existing entity: "
+                        f"{lookup_result.osw_id} for [{seg_id}]"
+                    )
+                    self.entities.pop(iri, None)
+                    self.entities[lookup_result.osw_id] = entity
+                    iri_remap[iri] = lookup_result.osw_id
+
+        if iri_remap:
+            self._remap_range_references(iri_remap)
 
         print(
             f"\n>> Entity construction complete: "
             f"{len(self.entities)} entities"
         )
         return self.entities
+
+    # ------------------------------------------------------------------
+    # Deduplication helpers
+    # ------------------------------------------------------------------
+
+    def _merge_entity_data(
+        self,
+        entity_id: str,
+        existing_data: Dict[str, Any],
+        existing_type: str,
+        data_instance: OswBaseModel,
+    ) -> str:
+        """Merge existing entity data with new data_instance.
+
+        When an entity in the vector store matches but the new description
+        has additional data, this method merges them using the appropriate
+        schema from the cache.
+
+        Returns the entity_id (entity is updated in entities dict).
+        """
+        print(f"\n>> Merging entity {entity_id}")
+        print(f"   Existing type: {existing_type}")
+
+        new_data = json.loads(data_instance.json(exclude_none=True))
+        new_data.pop("uuid", None)
+        print(f"Existing entity data: {existing_data}")
+        print(f"New data instance: {new_data}")
+        merged_data = {**existing_data, **new_data}
+        print(f"   Merged fields: {list(merged_data.keys())}")
+
+        try:
+            schema_cls = None
+
+            if existing_type:
+                inventory = get_cached_inventory()
+                schema_info = inventory.get_by_schema_id(existing_type)
+                if schema_info and schema_info.cls_obj:
+                    schema_cls = schema_info.cls_obj
+                    print(f"   Using schema: {schema_info.full_path}")
+
+            if schema_cls is None:
+                schema_cls = data_instance.__class__
+                print(f"   Using fallback schema: {schema_cls.__name__}")
+
+            merged_entity = schema_cls(**merged_data)
+            self.entities[entity_id] = merged_entity
+            print(f"   Entity {entity_id} stored with merged data")
+
+        except Exception as e:
+            print(f"   Error creating merged entity: {e}")
+            self.entities[entity_id] = data_instance
+            print(f"   Fallback: stored new instance for {entity_id}")
+
+        return entity_id
+
+    def _remap_range_references(self, iri_remap: Dict[str, str]):
+        """Remap range property references after deduplication.
+
+        After dedup, some entities' properties may reference old IRIs
+        that have been remapped to existing entity IRIs.
+        """
+        for iri, entity in list(self.entities.items()):
+            data = json.loads(entity.json(exclude_none=True))
+            changed = False
+            for key, value in data.items():
+                if isinstance(value, str) and value in iri_remap:
+                    data[key] = iri_remap[value]
+                    changed = True
+            if changed:
+                self.entities[iri] = entity.__class__(**data)
+
+    # ------------------------------------------------------------------
+    # Interface methods (compatible with benchmark.py)
+    # ------------------------------------------------------------------
+
+    def get_entities(self) -> Dict[str, Any]:
+        """Get all created entities."""
+        return self.entities
+
+    def store_entities(self):
+        """Store all created entities in vector store."""
+        for entity_id, entity in self.entities.items():
+            jsondata = json.loads(entity.json(exclude_none=True))
+            doc = Document(
+                id=entity_id,
+                page_content=json.dumps({"jsondata": jsondata}),
+                metadata={
+                    "name": jsondata.get("name", ""),
+                    "type": (
+                        jsondata.get("type", [""])[0]
+                        if isinstance(jsondata.get("type"), list)
+                        else jsondata.get("type", "")
+                    ),
+                },
+            )
+            self.vector_store.add_documents(documents=[doc])
+            print(f"Stored entity {entity_id} in vector store")
+
+    def clear(self):
+        """Clear all stored entities."""
+        self.entities.clear()
 
 
 # ---------------------------------------------------------------------------
