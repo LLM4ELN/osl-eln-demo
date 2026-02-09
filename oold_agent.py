@@ -2,7 +2,7 @@
 entities."""
 
 import json
-import re
+
 import uuid
 from typing import Dict, Any, Optional, List
 
@@ -57,6 +57,14 @@ class CreateParam(BaseModel):
     """textual description of the entity to create
     containing all available information
     """
+
+
+class FillableProperties(BaseModel):
+    """List of property names that can be filled from a description."""
+    properties: list[str] = Field(
+        ...,
+        description="List of property names that can be filled with actual information from the description"
+    )
 
 
 class ComparisonResult(BaseModel):
@@ -156,41 +164,61 @@ class OoldAgent(BaseModel):
             for prop, props in properties.items()
         }
 
-        prompt = f"""Given the following entity description:
-"{entity_description}"
+        fillable_schema = FillableProperties.model_json_schema()
 
-And the following schema properties:
-{json.dumps(property_descriptions, indent=2)}
+        if model_supports_structured_output(self._get_llm(), tools=[]):
+            response_format = ProviderStrategy(
+                schema=fillable_schema,
+                strict=True
+            )
+        else:
+            response_format = ToolStrategy(schema=fillable_schema)
 
-List ONLY the property names that can be filled with actual information
-from the description.
-Do not include properties where you would need to invent or
-hallucinate data.
-Return your answer as a JSON array of property names,
-e.g.: ["property1", "property2"]
-"""
+        agent = create_agent(
+            model=self._get_llm(),
+            response_format=response_format,
+            tools=[],
+        )
 
-        response = self._get_llm().invoke(prompt)
+        prompt = (
+            f"Given the following entity description:\n"
+            f"\"{entity_description}\"\n\n"
+            f"And the following schema properties:\n"
+            f"{json.dumps(property_descriptions, indent=2)}\n\n"
+            f"List ONLY the property names that can be filled with actual "
+            f"information from the description. "
+            f"Do not include properties where you would need to invent or "
+            f"hallucinate data."
+        )
+
         try:
-            content = (
-                response.content if hasattr(response, 'content')
-                else str(response)
-            )
-            json_match = re.search(
-                r'\[.*?\]', content, re.DOTALL
-            )
-            if json_match:
-                fillable = json.loads(json_match.group())
-                print(f"Fillable properties: {fillable}")
-                return fillable
+            result = agent.invoke({
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You identify which schema properties can be "
+                            "filled from a given description without "
+                            "hallucinating."
+                        )
+                    },
+                    {"role": "user", "content": prompt}
+                ]
+            })
+
+            if "structured_response" in result:
+                parsed = FillableProperties(**result["structured_response"])
+                # Filter to only valid property names
+                valid = [p for p in parsed.properties if p in properties]
+                print(f"Fillable properties: {valid}")
+                return valid
             else:
                 print(
-                    "Warning: Could not parse fillable properties, "
-                    "using all"
+                    "Warning: No structured_response, using all properties"
                 )
                 return list(properties.keys())
         except Exception as e:
-            print(f"Error parsing fillable properties: {e}, using all")
+            print(f"Error identifying fillable properties: {e}, using all")
             return list(properties.keys())
 
     def _filter_schema_properties(
