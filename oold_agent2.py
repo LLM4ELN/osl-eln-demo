@@ -71,8 +71,18 @@ class SegmentationResultA(BaseModel):
 # Variant B
 # ---------------------------------------------------------------------------
 
+class KeyValuePair(BaseModel):
+    """A single key-value pair for structured property representation."""
+    key: str = Field(
+        ..., description="Property name from the schema"
+    )
+    value: str = Field(
+        ..., description="Literal value or textual description of a linked entity"
+    )
+
+
 class EntityPropertyDescription(BaseModel):
-    """Variant B: Schema + property key-value map."""
+    """Variant B: Schema + property key-value list."""
     schema_path: str = Field(
         ...,
         description=(
@@ -80,12 +90,12 @@ class EntityPropertyDescription(BaseModel):
             "e.g. 'opensemantic.base.v1.Event'"
         ),
     )
-    properties: Dict[str, str] = Field(
+    properties: List[KeyValuePair] = Field(
         ...,
         description=(
-            "Key-value map where keys are property names from the schema "
-            "and values are either literal values or textual descriptions "
-            "of linked entities"
+            "List of key-value pairs where keys are property names from "
+            "the schema and values are either literal values or textual "
+            "descriptions of linked entities"
         ),
     )
 
@@ -117,20 +127,29 @@ class EntityPropertyMap(BaseModel):
             "e.g. 'opensemantic.base.v1.Event'"
         ),
     )
-    literal_properties: Dict[str, str] = Field(
-        default_factory=dict,
+    literal_properties: List[KeyValuePair] = Field(
+        default_factory=list,
         description=(
-            "Key-value map for properties with literal values "
+            "List of key-value pairs for properties with literal values "
             "(strings, numbers, dates)"
         ),
     )
-    range_properties: Dict[str, str] = Field(
-        default_factory=dict,
+    range_properties: List[KeyValuePair] = Field(
+        default_factory=list,
         description=(
-            "Key-value map for range properties (links to other entities). "
+            "List of key-value pairs for range properties "
+            "(links to other entities). "
             "Values are the 'id' fields of other entities in this plan."
         ),
     )
+
+    def literal_dict(self) -> Dict[str, str]:
+        """Convert literal_properties to a dict."""
+        return {kv.key: kv.value for kv in self.literal_properties}
+
+    def range_dict(self) -> Dict[str, str]:
+        """Convert range_properties to a dict."""
+        return {kv.key: kv.value for kv in self.range_properties}
 
 
 class SegmentationResultC(BaseModel):
@@ -175,7 +194,7 @@ data model schema.
 ## Rules
 1. Use the SPECIFIC AS NEEDED BUT GENERIC AS POSSIBLE schema available, e.g. \
 'opensemantic.core.v1.Person' for a normal person, not 'opensemantic.core.v1.Entity' (too generic) \
-and not 'opensemantic.lab.v1.Researcher' if the description is generic). \
+and not 'opensemantic.lab.v1.Researcher' (too specific) if the description gives no indication that the person is a researcher). \
 2. Use the MINIMAL number of entities needed — do not create redundant entities.
 3. Place information in the most specific property available. For example, \
 an address belongs in the 'postal_address' property, not in 'description'.
@@ -321,6 +340,7 @@ class SegmentationAgent(BaseModel):
 
         # Structured output
         schema = result_model.model_json_schema()
+        schema = modify_schema(schema)  # Ensure compatibility with older models and xgrammar
         llm = self._get_llm()
 
         if model_supports_structured_output(llm, tools=[]):
@@ -424,7 +444,7 @@ class SegmentationAgent(BaseModel):
             f"Create a JSON document for the following entity.\n"
             f"Schema: {entity.schema_path}\n"
             f"Properties to fill:\n"
-            f"{json.dumps(entity.literal_properties, indent=2)}\n\n"
+            f"{json.dumps(entity.literal_dict(), indent=2)}\n\n"
             f"Use the following schema:\n{schema_str}"
         )
 
@@ -538,7 +558,7 @@ class SegmentationAgent(BaseModel):
                 print(f"  Error loading schema {entity.schema_path}: {e}")
                 continue
 
-            literal_keys = list(entity.literal_properties.keys())
+            literal_keys = list(entity.literal_dict().keys())
             filtered = self._filter_schema(target_schema, literal_keys)
 
             try:
@@ -587,7 +607,7 @@ class SegmentationAgent(BaseModel):
             if entity.id not in results:
                 continue
             result_dict, _ = results[entity.id]
-            for prop_name, ref_id in entity.range_properties.items():
+            for prop_name, ref_id in entity.range_dict().items():
                 if ref_id in id_map:
                     osw_id, _ = id_map[ref_id]
                     result_dict[prop_name] = osw_id
@@ -790,12 +810,20 @@ def segmentation_test(test_prompt: str):
         for e in entities:
             if isinstance(e, EntityPropertyMap):
                 print(f"  [{e.id}] {e.schema_path}")
-                print(f"    literals: {e.literal_properties}")
-                print(f"    ranges:   {e.range_properties}")
+                print(f"    literals: {e.literal_dict()}")
+                print(f"    ranges:   {e.range_dict()}")
             elif isinstance(e, EntityPropertyDescription):
                 print(f"  {e.schema_path}: {e.properties}")
             else:
                 print(f"  {e.schema_path}: {e.description}")
+
+def invoke_test(test_prompt: str):
+    """Quick test of full entity construction."""
+    agent = SegmentationAgent()
+    entities = agent.invoke(test_prompt)
+    print(f"\nConstructed {len(entities)} entities:")
+    for iri, entity in entities.items():
+        print(f"  {iri}: {entity.json(exclude_none=True)}")
 
 if __name__ == "__main__":
     test_prompt = (
@@ -810,3 +838,4 @@ The availability of stretchable conductive materials is a key requirement for th
     )
 
     segmentation_test(test_prompt)
+    #invoke_test(test_prompt)
