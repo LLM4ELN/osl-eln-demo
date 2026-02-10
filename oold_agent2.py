@@ -436,44 +436,68 @@ class SegmentationAgent(BaseModel):
         self,
         entity_description: str,
         schema: dict,
-    ) -> List[str]:
-        """Ask LLM which properties can be filled from description.
+        entity_context: str = "",
+    ) -> list[str]:
+        """Ask LLM to identify which properties can be filled from
+        description.
+
+        Args:
+            entity_description: Description of the current entity.
+            schema: JSON schema for this entity type.
+            entity_context: Summary of all entities in the plan, so the
+                LLM can identify range properties as fillable when a
+                matching entity exists.
 
         Returns list of property names that can be filled without
         hallucinating.
         """
+        print("\n>> Identifying fillable properties...")
+
         properties = schema.get("properties", {})
         property_descriptions = {
             prop: {
                 "type": props.get("type", "unknown"),
                 "description": props.get("description", ""),
-                "range": props.get("range", None),
+                "range": props.get("range", None)
             }
             for prop, props in properties.items()
         }
 
         fillable_schema = FillableProperties.model_json_schema()
-        fillable_schema = modify_schema(fillable_schema)
 
-        llm = self._get_llm()
-        if model_supports_structured_output(llm, tools=[]):
+        if model_supports_structured_output(self._get_llm(), tools=[]):
             response_format = ProviderStrategy(
-                schema=fillable_schema, strict=True
+                schema=fillable_schema,
+                strict=True
             )
         else:
             response_format = ToolStrategy(schema=fillable_schema)
 
         agent = create_agent(
-            model=llm, response_format=response_format, tools=[]
+            model=self._get_llm(),
+            response_format=response_format,
+            tools=[],
         )
+
+        context_section = ""
+        if entity_context:
+            context_section = (
+                f"\n\nThe following entities exist in the plan:\n"
+                f"{entity_context}\n\n"
+                f"For properties with a 'range' annotation, include them "
+                f"as fillable if a matching entity of the expected type "
+                f"exists in the plan above.\n"
+            )
 
         prompt = (
             f"Given the following entity description:\n"
             f"\"{entity_description}\"\n\n"
             f"And the following schema properties:\n"
-            f"{json.dumps(property_descriptions, indent=2)}\n\n"
+            f"{json.dumps(property_descriptions, indent=2)}\n"
+            f"{context_section}\n"
             f"List ONLY the property names that can be filled with actual "
-            f"information from the description. "
+            f"information from the description or by linking to entities "
+            f"in the plan. "
             f"Do not include properties where you would need to invent or "
             f"hallucinate data."
         )
@@ -487,25 +511,25 @@ class SegmentationAgent(BaseModel):
                             "You identify which schema properties can be "
                             "filled from a given description without "
                             "hallucinating."
-                        ),
+                        )
                     },
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": prompt}
                 ]
             })
 
             if "structured_response" in result:
                 parsed = FillableProperties(**result["structured_response"])
+                # Filter to only valid property names
                 valid = [p for p in parsed.properties if p in properties]
+                print(f"Fillable properties: {valid}")
                 return valid
             else:
                 print(
-                    "  Warning: No structured_response, using all properties"
+                    "Warning: No structured_response, using all properties"
                 )
                 return list(properties.keys())
         except Exception as e:
-            print(
-                f"  Error identifying fillable properties: {e}, using all"
-            )
+            print(f"Error identifying fillable properties: {e}, using all")
             return list(properties.keys())
 
     @staticmethod
@@ -525,54 +549,123 @@ class SegmentationAgent(BaseModel):
     # Property value extraction (Step 3)
     # ------------------------------------------------------------------
 
+    def _build_extraction_schema(
+        self,
+        entity_info_list: List[dict],
+    ) -> dict:
+        """Build a dynamic JSON schema for property value extraction.
+
+        Each entity becomes a named object with its specific fillable
+        properties as required string fields — forcing the LLM to fill
+        every property (including range properties).
+        """
+        inventory = get_cached_inventory()
+        entity_schemas = {}
+
+        for info in entity_info_list:
+            props = {}
+            for prop_name in info["literal_props"]:
+                props[prop_name] = {
+                    "type": "string",
+                    "description": "Literal value from the description",
+                }
+            for prop_name in info["range_props"]:
+                range_schema_id = info["range_map"].get(prop_name, "")
+                range_info = inventory.get_by_schema_id(range_schema_id)
+                if range_info:
+                    type_hint = range_info.full_path.split(".")[-1]
+                else:
+                    type_hint = "entity"
+                props[prop_name] = {
+                    "type": "string",
+                    "description": (
+                        f"Range property — use the entity id "
+                        f"of the linked {type_hint}"
+                    ),
+                }
+
+            all_prop_names = list(props.keys())
+            entity_schemas[info["entity_id"]] = {
+                "type": "object",
+                "properties": props,
+                "required": all_prop_names,
+                "additionalProperties": False,
+            }
+
+        return {
+            "type": "object",
+            "properties": entity_schemas,
+            "required": list(entity_schemas.keys()),
+            "additionalProperties": False,
+        }
+
     def _extract_property_values(
         self,
-        entities_info: List[dict],
-    ) -> List[EntityPropertyMap]:
+        entity_info_list: List[dict],
+    ) -> Dict[str, Dict[str, str]]:
         """Extract property values for all entities in a single LLM call.
 
+        Uses a dynamic per-entity JSON schema where all fillable
+        properties (literal and range) are required.
+
         Args:
-            entities_info: List of dicts with keys:
-                id, schema_path, description, literal_props, range_props
+            entity_info_list: List of dicts with keys:
+                entity_id, schema_path, description,
+                literal_props, range_props, range_map
 
         Returns:
-            List[EntityPropertyMap] with extracted values.
+            Dict mapping entity_id -> {prop_name -> value}.
         """
-        entity_sections = []
-        for info in entities_info:
-            lit = ", ".join(info["literal_props"]) or "(none)"
-            rng = ", ".join(info["range_props"]) or "(none)"
-            section = (
-                f"Entity {info['id']} ({info['schema_path']}):\n"
-                f"  Description: {info['description']}\n"
-                f"  Literal properties to fill: {lit}\n"
-                f"  Range properties to fill: {rng}"
+        # Build entity reference table for the prompt
+        ref_lines = []
+        for info in entity_info_list:
+            short_type = info["schema_path"].split(".")[-1]
+            ref_lines.append(
+                f"  {info['entity_id']}: {short_type} "
+                f"— \"{info['description']}\""
             )
-            entity_sections.append(section)
+        entity_ref = "\n".join(ref_lines)
+
+        # Build per-entity property listing
+        entity_sections = []
+        for info in entity_info_list:
+            lines = [
+                f"Entity {info['entity_id']} "
+                f"({info['schema_path']}):",
+                f"  Description: {info['description']}",
+            ]
+            if info["literal_props"]:
+                lines.append(
+                    f"  Literal properties: "
+                    f"{', '.join(info['literal_props'])}"
+                )
+            if info["range_props"]:
+                lines.append("  Range properties (use entity id as value):")
+                for rp in info["range_props"]:
+                    lines.append(f"    - {rp}")
+            entity_sections.append("\n".join(lines))
 
         entity_listing = "\n\n".join(entity_sections)
 
         sys_prompt = (
             "You are an expert data extraction assistant. "
-            "Given entity descriptions and lists of properties to fill, "
-            "extract the actual values from the descriptions. "
+            "Extract property values from entity descriptions. "
             "For literal properties, provide the actual value "
             "(string, number, date). "
-            "For range properties, provide the id of the linked entity "
-            "from this plan. "
-            "Do NOT invent information not present in the descriptions. "
-            "Do NOT generate dummy or placeholder values."
+            "For range properties, provide the entity id of the "
+            "linked entity from the plan below. "
+            "You MUST fill ALL properties — they are all required. "
+            "Do NOT invent information not in the descriptions."
         )
 
         user_prompt = (
-            f"Extract property values for the following entities:\n\n"
-            f"{entity_listing}\n\n"
-            f"For each entity, fill ONLY the listed properties with values "
-            f"from the description. Use the entity ids for range property "
-            f"references."
+            f"## Available Entities\n{entity_ref}\n\n"
+            f"## Entities to Extract\n\n{entity_listing}\n\n"
+            f"Fill ALL listed properties for each entity."
         )
 
-        schema = SegmentationResultC.model_json_schema()
+        # Build and apply dynamic schema
+        schema = self._build_extraction_schema(entity_info_list)
         schema = modify_schema(schema)
 
         llm = self._get_llm()
@@ -597,28 +690,24 @@ class SegmentationAgent(BaseModel):
             })
         except Exception as e:
             print(f"  Error extracting property values: {e}")
-            return []
+            return {}
 
         elapsed = time.time() - t0
 
         if "structured_response" not in result:
             print(f"  Error: No structured_response: {result}")
-            return []
+            return {}
 
-        parsed = SegmentationResultC(**result["structured_response"])
+        extracted = result["structured_response"]
 
         print(
-            f"  Extracted values for {len(parsed.entities)} entities "
+            f"  Extracted values for {len(extracted)} entities "
             f"in {elapsed:.2f}s"
         )
-        for entity in parsed.entities:
-            print(f"  [{entity.id}] {entity.schema_path}")
-            if entity.literal_properties:
-                print(f"    literals: {entity.literal_dict()}")
-            if entity.range_properties:
-                print(f"    ranges:   {entity.range_dict()}")
+        for eid, props in extracted.items():
+            print(f"  [{eid}] {props}")
 
-        return parsed.entities
+        return extracted
 
     # ------------------------------------------------------------------
     # Single entity creation (LLM call with retries)
@@ -766,6 +855,17 @@ class SegmentationAgent(BaseModel):
         print("\n>> Loading schemas and identifying fillable properties...")
         entity_info_list: List[dict] = []
 
+        # Build entity context string so each _identify_fillable_properties
+        # call knows which other entities exist (needed for range properties)
+        context_lines = []
+        for i, ent in enumerate(segmentation):
+            short_type = ent.schema_path.split(".")[-1]
+            context_lines.append(
+                f"  {entity_ids[i]}: {short_type} ({ent.schema_path}) "
+                f"— \"{ent.description}\""
+            )
+        entity_context = "\n".join(context_lines)
+
         def _process_entity(idx, entity):
             eid = entity_ids[idx]
             try:
@@ -777,7 +877,7 @@ class SegmentationAgent(BaseModel):
                 return None
 
             fillable = self._identify_fillable_properties(
-                entity.description, target_schema
+                entity.description, target_schema, entity_context
             )
             print(f"  [{eid}] {entity.schema_path}: fillable={fillable}")
 
@@ -814,20 +914,8 @@ class SegmentationAgent(BaseModel):
             print("Error: No entities could be processed")
             return self.entities
 
-        # Step 3: Extract property values (single LLM call)
-        extraction_input = [
-            {
-                "id": info["entity_id"],
-                "schema_path": info["schema_path"],
-                "description": info["description"],
-                "literal_props": info["literal_props"],
-                "range_props": info["range_props"],
-            }
-            for info in entity_info_list
-        ]
-
-        extracted = self._extract_property_values(extraction_input)
-        extraction_map = {e.id: e for e in extracted}
+        # Step 3: Extract property values (single LLM call, dynamic schema)
+        extraction_map = self._extract_property_values(entity_info_list)
 
         # Step 4: Create entities in parallel (with property hints)
         print(f"\n>> Creating {len(entity_info_list)} entities...")
@@ -847,11 +935,7 @@ class SegmentationAgent(BaseModel):
                 )
                 continue
 
-            hints = {}
-            extracted_entity = extraction_map.get(info["entity_id"])
-            if extracted_entity:
-                hints.update(extracted_entity.literal_dict())
-                hints.update(extracted_entity.range_dict())
+            hints = extraction_map.get(info["entity_id"], {})
 
             entity_uuid = uuid.uuid4()
             entity_preparations.append(
@@ -909,21 +993,20 @@ class SegmentationAgent(BaseModel):
                 continue
             result_dict, _, _ = results[entity_id]
 
-            extracted_entity = extraction_map.get(entity_id)
-            if extracted_entity:
-                for kv in extracted_entity.range_properties:
-                    ref_id = kv.value
-                    if ref_id in id_map:
-                        osw_id, _ = id_map[ref_id]
-                        result_dict[kv.key] = osw_id
-                        print(
-                            f"  [{entity_id}].{kv.key} -> {osw_id}"
-                        )
-                    else:
-                        print(
-                            f"  Warning: [{entity_id}].{kv.key} "
-                            f"references unknown '{ref_id}'"
-                        )
+            entity_values = extraction_map.get(entity_id, {})
+            for prop_name in info["range_props"]:
+                ref_id = entity_values.get(prop_name, "")
+                if ref_id in id_map:
+                    osw_id, _ = id_map[ref_id]
+                    result_dict[prop_name] = osw_id
+                    print(
+                        f"  [{entity_id}].{prop_name} -> {osw_id}"
+                    )
+                elif ref_id:
+                    print(
+                        f"  Warning: [{entity_id}].{prop_name} "
+                        f"references unknown '{ref_id}'"
+                    )
 
         # Step 6: Construct OswBaseModel instances
         print("\n>> Constructing final entities...")
