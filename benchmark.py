@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass, field
 import yaml
 
 from oold_agent import OoldAgent
+from oold_agent2 import SegmentationAgent
 from schema_catalog import get_cached_inventory
 
 
@@ -63,6 +64,17 @@ def _apply_model_config(model_config: Dict[str, Any]):
     # provider lives outside litellm_params
     if "provider" in model_config:
         os.environ["API_PROVIDER"] = model_config["provider"]
+
+
+def create_benchmark_agent(agent_type: str = "iterative"):
+    """Create a benchmark agent of the specified type.
+
+    Args:
+        agent_type: "iterative" for OoldAgent, "segmentation" for SegmentationAgent.
+    """
+    if agent_type == "segmentation":
+        return SegmentationAgent()
+    return OoldAgent()
 
 
 @dataclass
@@ -120,6 +132,7 @@ class BenchmarkResult:
 class ModelBenchmarkResult:
     """Results from all runs of a single model."""
     model: str
+    agent_type: str = "iterative"
     runs: List[BenchmarkResult] = field(default_factory=list)
 
 
@@ -286,7 +299,7 @@ def find_matching_entity(
 
 def validate_chapter(
     chapter: ChapterExpectation,
-    agent: OoldAgent,
+    agent: Any,
     previous_entity_ids: set
 ) -> ChapterResult:
     """Validate a chapter's results."""
@@ -481,12 +494,15 @@ def validate_chapter(
     return result
 
 
-def run_benchmark(verbose: bool = True) -> BenchmarkResult:
+def run_benchmark(
+    verbose: bool = True,
+    agent_type: str = "iterative",
+) -> BenchmarkResult:
     """Run the benchmark using the playbook test cases."""
     result = BenchmarkResult()
 
     # Create agent with fresh vector store
-    agent = OoldAgent()
+    agent = create_benchmark_agent(agent_type)
 
     all_entity_ids: set = set()
     total_start = time.time()
@@ -505,11 +521,12 @@ def run_benchmark(verbose: bool = True) -> BenchmarkResult:
 
         try:
             # Invoke the agent
-            entity_id = agent.invoke(prompt=chapter.prompt)
+            invoke_result = agent.invoke(prompt=chapter.prompt)
 
             chapter_elapsed = time.time() - chapter_start
 
-            if entity_id is None:
+            # Check if any entities were created (works for both agent types)
+            if not agent.entities:
                 chapter_result = ChapterResult(chapter_name=chapter.name)
                 chapter_result.errors.append(ValidationError(
                     chapter=chapter.name,
@@ -649,6 +666,7 @@ def _run_benchmarks_for_model(
     run_runs_parallel: bool,
     verbose: bool,
     run_timeout: float = 600,
+    agent_type: str = "iterative",
 ) -> ModelBenchmarkResult:
     """Run all benchmark repetitions for a single model.
 
@@ -658,12 +676,14 @@ def _run_benchmarks_for_model(
     """
     _apply_model_config(model_config)
     model = model_config["model_name"]
-    model_result = ModelBenchmarkResult(model=model)
+    model_result = ModelBenchmarkResult(model=model, agent_type=agent_type)
 
     if run_runs_parallel:
         executor = ThreadPoolExecutor(max_workers=n_runs)
         futures = {
-            executor.submit(run_benchmark, verbose=verbose): i
+            executor.submit(
+                run_benchmark, verbose=verbose, agent_type=agent_type
+            ): i
             for i in range(n_runs)
         }
         indexed: Dict[int, BenchmarkResult] = {}
@@ -705,7 +725,9 @@ def _run_benchmarks_for_model(
         for run_idx in range(n_runs):
             print(f"\n--- Run {run_idx + 1}/{n_runs} for {model} ---")
             executor = ThreadPoolExecutor(max_workers=1)
-            future = executor.submit(run_benchmark, verbose=verbose)
+            future = executor.submit(
+                run_benchmark, verbose=verbose, agent_type=agent_type
+            )
             result = _collect_future_result(
                 future, run_idx, run_timeout
             )
@@ -732,6 +754,8 @@ def run_model_comparison(
 ) -> List[ModelBenchmarkResult]:
     """Run the benchmark for each model defined in the config.
 
+    Runs the cross product of (model x agent_type) combinations.
+
     Args:
         config: Benchmark configuration dict (loaded from YAML).
             If None, loads from the default config file.
@@ -741,50 +765,61 @@ def run_model_comparison(
         config = load_benchmark_config()
 
     model_configs = config["models"]
+    agent_types = config.get("agent_type", ["iterative"])
     n_runs = config.get("runs", 3)
     run_timeout = config.get("timeout", 600)
     run_models_parallel = config.get("parallel_models", False)
     run_runs_parallel = config.get("parallel_runs", False)
 
+    # Build cross product of (model_config, agent_type)
+    combinations = [
+        (mc, at) for mc in model_configs for at in agent_types
+    ]
+
     if run_models_parallel:
-        with ProcessPoolExecutor(max_workers=len(model_configs)) as executor:
-            future_to_model = {
+        with ProcessPoolExecutor(max_workers=len(combinations)) as executor:
+            future_to_key = {
                 executor.submit(
                     _run_benchmarks_for_model_packed,
-                    (mc, n_runs, run_runs_parallel, verbose, run_timeout),
-                ): mc["model_name"]
-                for mc in model_configs
+                    (mc, n_runs, run_runs_parallel, verbose, run_timeout, at),
+                ): (mc["model_name"], at)
+                for mc, at in combinations
             }
-            results_by_model: Dict[str, ModelBenchmarkResult] = {}
-            for future in as_completed(future_to_model):
-                model = future_to_model[future]
+            results_by_key: Dict[tuple, ModelBenchmarkResult] = {}
+            for future in as_completed(future_to_key):
+                key = future_to_key[future]
+                model, at = key
                 try:
-                    results_by_model[model] = future.result()
+                    results_by_key[key] = future.result()
                 except Exception:
                     tb = traceback.format_exc()
-                    print(f"\n### MODEL {model} CRASHED:\n{tb}")
-                    results_by_model[model] = ModelBenchmarkResult(
-                        model=model
+                    print(f"\n### {model}/{at} CRASHED:\n{tb}")
+                    results_by_key[key] = ModelBenchmarkResult(
+                        model=model, agent_type=at
                     )
-            # preserve original model order
+            # preserve original order
             all_results = [
-                results_by_model[mc["model_name"]] for mc in model_configs
+                results_by_key[(mc["model_name"], at)]
+                for mc, at in combinations
             ]
     else:
         all_results = []
-        for mc in model_configs:
+        for mc, at in combinations:
             model = mc["model_name"]
             print(f"\n{'#'*60}")
-            print(f"# MODEL: {model}")
+            print(f"# MODEL: {model}  AGENT: {at}")
             print(f"{'#'*60}")
             try:
                 model_result = _run_benchmarks_for_model(
-                    mc, n_runs, run_runs_parallel, verbose, run_timeout
+                    mc, n_runs, run_runs_parallel, verbose,
+                    run_timeout, agent_type=at,
                 )
             except Exception:
                 tb = traceback.format_exc()
-                print(f"\n### MODEL {model} CRASHED:\n{tb}")
-                model_result = ModelBenchmarkResult(model=model)
+                print(f"\n### {model}/{at} CRASHED:\n{tb}")
+                model_result = ModelBenchmarkResult(
+                    model=model, agent_type=at
+                )
             all_results.append(model_result)
 
     return all_results
@@ -800,7 +835,7 @@ def print_comparison(all_results: List[ModelBenchmarkResult]):
         runs = model_result.runs
         n = len(runs)
 
-        print(f"\nModel: {model_result.model}")
+        print(f"\nModel: {model_result.model}  Agent: {model_result.agent_type}")
 
         if n == 0:
             print("  No completed runs (all crashed)")

@@ -1,5 +1,8 @@
 benchmark:
-  runs: 3
+  agent_type:
+    # - "iterative"
+    - "segmentation"
+  runs: 1
   timeout: 900  # seconds per run
   parallel_models: true
   parallel_runs: true
