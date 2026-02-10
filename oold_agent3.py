@@ -40,8 +40,6 @@ from util import (
     remove_nulls,
 )
 
-osl_client = get_osl_client()
-
 # ---------------------------------------------------------------------------
 # Step 1: Schema Detection Models (static JSON-SCHEMA)
 # ---------------------------------------------------------------------------
@@ -95,7 +93,7 @@ mentioned and map each to the most appropriate data model schema.
 Pick the schema that best fits the entity described — not too generic \
 (avoid the root entity type) and not too specific (avoid narrow subtypes \
 unless the description warrants it).
-2. Use the MINIMAL number of entities needed — do not create redundant entities.
+2. Do not create redundant entities.
 3. If the same real-world entity is mentioned multiple times, use the SAME id \
 and consolidate all information about it into one description.
 4. Entities should be linked via range properties where the schema defines them.
@@ -366,6 +364,13 @@ class MultiStepAgent(BaseModel):
 
         # Wrap in fillable_properties object
         fillable_schema = {
+            "title": "FillablePropertiesSchema",
+            "description": (
+                "For each detected entity, list which properties can be filled "
+                "with actual information from the description or by linking to "
+                "other entities in the plan. Do not include properties where "
+                "you would need to invent or hallucinate data."
+            ),
             "type": "object",
             "properties": {
                 "fillable_properties": {
@@ -616,6 +621,16 @@ class MultiStepAgent(BaseModel):
             return {}
 
         extraction_schema = {
+            "title": "EntityPropertyExtractionSchema",
+            "description": (
+                "For each detected entity, fill all listed properties based on "
+                "the original description and entity plan. "
+                "For literal properties, provide the actual value from the "
+                "description. "
+                "For range properties (those with enum options), select the "
+                "entity ID of the linked entity from the enum. "
+                "Do NOT invent information not present in the descriptions."
+            ),
             "type": "object",
             "properties": {
                 "entities": {
@@ -1169,6 +1184,7 @@ def invoke_test(test_prompt: str):
 
 
 if __name__ == "__main__":
+    osl_client = get_osl_client()
     test_prompt = (
         "A tensile test experiment #1 conducted by Dr. Jane Doe "
         ", employed at Example Lab Corp.\n"

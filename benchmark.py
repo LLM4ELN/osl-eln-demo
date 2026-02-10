@@ -14,10 +14,12 @@ import yaml
 
 from oold_agent import OoldAgent
 from oold_agent2 import SegmentationAgent
-from osl_init import get_osl_client
+from oold_agent3 import MultiStepAgent
+import dummy_backend
 from schema_catalog import get_cached_inventory
 
-osl_client = get_osl_client()
+dummy_backend.register()
+
 
 CONFIG_FILE = Path(__file__).parent / "benchmark_config.yaml"
 
@@ -27,6 +29,7 @@ _LITELLM_ENV_MAPPING = {
     "api_base": "API_ENDPOINT",
     "api_key": "API_KEY",
     "api_version": "API_VERSION",
+    "temperature": "API_TEMPERATURE",
 }
 
 
@@ -72,10 +75,13 @@ def create_benchmark_agent(agent_type: str = "iterative"):
     """Create a benchmark agent of the specified type.
 
     Args:
-        agent_type: "iterative" for OoldAgent, "segmentation" for SegmentationAgent.
+        agent_type: "iterative" for OoldAgent, "segmentation" for
+            SegmentationAgent, "multi_step" for MultiStepAgent.
     """
     if agent_type == "segmentation":
         return SegmentationAgent()
+    if agent_type == "multi_step":
+        return MultiStepAgent()
     return OoldAgent()
 
 
