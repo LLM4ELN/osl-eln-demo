@@ -14,8 +14,10 @@ import yaml
 
 from oold_agent import OoldAgent
 from oold_agent2 import SegmentationAgent
+from osl_init import get_osl_client
 from schema_catalog import get_cached_inventory
 
+osl_client = get_osl_client()
 
 CONFIG_FILE = Path(__file__).parent / "benchmark_config.yaml"
 
