@@ -124,3 +124,171 @@ The following models were evaluated for the simple iterative approach:
 7. Compare the created entity with existing entities by using RAG + LLM judging. If a match is found, return the existing entity ID
 8. Store the created entity and return its ID
 
+-----
+### Segmentation approach
+
+We need to build a generic agent that can operate with a large schema repo so we cannot give specific hint. Only our test scenario is specific about a LaboratoryProcess
+
+Skip property selection was tested, but lead to poor relevance decision on which properties should be populated (often additional properties got populated with assumption and redudant information)
+
+In a realistic usecase the agent will operate on a huge knowledge base so the initial RAG vector store lookup based just on the initial prompt may have a limited recall. As the availability of a vector store is not guranteed, we could also rely on a convectional query interface which cannot operate with the prompt but with the already structured json.
+
+lookup_excact_matching_entity gets the json of the previously generated entity - so for a Person linked to a LaboratoryProcess it is only about the Person
+
+------
+
+create a oold_agent2.py which utilized a different strategy (reusing methods / subclassing OoldAgent of needed):
+
+1. Segment the initial input by providing all available data models to the llms and ask for a set of data models that (a) can capture all provided information (b) are linked to each other (by following the 'range' annotation of properties. Optimization criteria: (i) use more specific properties (e.g. store an email in a 'email' property, not in a 'description' property) (ii) use a minimal number of schemas. Result is a structured list of entities
+
+Variant A
+class EntityDescription(BaseModel)
+  schema: str
+  "name of the selected data model"
+  description: str
+  "part of the initial prompt where this entity is the subject"
+
+Variant B
+class EntityPropertyDescription(BaseModel)
+  schema: str
+  "name of the selected data model"
+  properties: dict[str, str]
+  "a key-value map for the properties of the selected schema with literal values of descriptions of the linked entity"
+
+Variant C
+class EntityPropertyMap(BaseModel)
+  id: str
+  "within the current context unique id"
+  schema: str
+  "name of the selected data model"
+  literal_properties: dict[str, str]
+  "a key-value map for the properties of the selected schema with literal values"
+  range_properties:
+  "a key-value map for the range properties of the selected schema. values are ids of other entities in this context"
+
+for now implement just this step and write a simple test based on the benchmark input prompts
+
+--
+
+Again property completion motivation is poor.
+we need to go with Variant A and continue then as we did in OoldAgent but for all identified schemas: do another prompt to select fillable properties and their values. Then construct a ad-hoc schema for all identified entities
+
+_extract_property_values needs to run for all entities in a single prompt (compare Variant C) so the LLM can link to other entities by their local id. But different to Variant C, a per entity schema is constructed with identified range properties mandatory.
+
+---
+
+create oold_agent3.py which utilizes the following strategy (use 3A, not 3B).
+Take inspiration from oold_agent2.py and oold_agent.py for overlapping functionality
+Dont use any specifics of the example data and schemas in the prompts - only the general task of creating linked entities based on natural language descriptions
+
+Example input prompt:
+"A tensile test experiment #1 conducted by Dr. Jane Doe, employed at Example Lab Corp.
+A tensile test experiment #2 conducted by Dr. John Doe, employed at Example Lab Corp.
+A tensile test experiment #3 conducted by Dr. John Doe (john.doe@example-lab.com)"
+
+
+#1 Schema detection with original prompt provided as context
+schema: (static JSON-SCHEMA)
+  properties:
+    entities:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+          schema:
+            type: string
+          description:
+            type: string
+Example output:
+entity_11: opensemantic.lab.v1.LaboratoryProcess "A tensile test experiment #1 conducted by Dr. Jane Doe"
+entity_12: opensemantic.core.v1.Person "Dr. Jane Doe, employed at Example Lab Corp."
+entity_13: opensemantic.base.v1.Organization "Example Lab Corp."
+entity_21: opensemantic.lab.v1.LaboratoryProcess "A tensile test experiment #2 conducted by Dr. John Doe"
+entity_22: opensemantic.core.v1.Person  "Dr. John Doe (john.doe@example-lab.com), employed at Example Lab Corp."
+entity_31: opensemantic.lab.v1.LaboratoryProcess "A tensile test experiment #3 conducted by Dr. John Doe"
+
+#2 Fillable Property definition: original prompt + result of step 1 provided as context
+schema: (auto-generated JSON-SCHEMA)
+  properties:
+    fillable_properties:
+      type: object
+      properties:
+         entity_11:
+           type: array
+           items:
+             type: string
+             enum: [list of all possible properties of the schema]
+         entity_12:
+           type: array
+           ...
+Example output:
+entity_11: 'name', 'creator'
+entity_12: 'first_name', 'surname', 'organization'
+
+#3.B Property extraction, one-shot (all fillable properties + required properties in schema mandatory via dynamic JSON-SCHEMA generation!)
+schema: (auto-generated JSON-SCHEMA)
+  properties:
+    entities:
+      type: object
+      properties:
+         entity_11:
+           type: object
+           <opensemantic.lab.v1.LaboratoryProcess schema with non-fillable properties and non-required properties removed, e.g.:>
+           properties:
+             name: <definition from opensemantic.lab.v1.LaboratoryProcess.name>
+             label: <definition from opensemantic.lab.v1.LaboratoryProcess.label>
+             creator: <definition from opensemantic.lab.v1.LaboratoryProcess.creator>
+         entity_12:
+           type: object
+             <opensemantic.core.v1.Person schema with non-fillable properties and non-required properties removed, ...>
+Problem: range properties are still of type string here!
+
+#3.A Property extraction like Variant C: all entities in one prompt, but with all fillable properties + required properties in schema mandatory via dynamic JSON-SCHEMA generation. Literal properties are of type string, range properties are of type string enum with the ids of the other entities in this context. Original prompt + result of step 1 provided as context.
+
+schema: (auto-generated JSON-SCHEMA)
+  properties:
+    entities:
+      type: object
+      properties:
+         entity_11:
+           type: object
+           properties:
+             name:
+               type: string
+             label:
+               type: string
+             creator:
+               type: string
+               enum: [entity_12, entity_22, entity_32]
+         entity_12:
+           properties:
+             first_name:
+               type: string
+             surname:
+               type: string
+             organization:
+               type: string
+               enum: [entity_13]
+         ...
+
+Example output:
+entity_11: 
+  name: "Exp 1"
+  creator: entity_12
+entity_12
+  first_name: ...
+
+#4 Entity construction: Replace readable ids with OSW-IDs. Per entity ask LLM to construct the final JSON based on the original schema (with all non-mandatory properties removed) and the filled properties from step 3.
+
+#5 Deduplication with existing entities via RAG + LLM judging
+
+# Validation / Benchmarking
+
+entity_11: opensemantic.lab.v1.LaboratoryProcess ["name", "creator"]
+entity_12: opensemantic.core.v1.Person ["first_name", "surname", "organization"]
+entity_13: opensemantic.base.v1.Organization ["name"]
+entity_21: opensemantic.lab.v1.LaboratoryProcess ["name", "creator"]
+entity_22: opensemantic.core.v1.Person ["first_name", "surname", "organization", "email"]
+entity_23: opensemantic.lab.v1.LaboratoryProcess ["name", "creator"]
