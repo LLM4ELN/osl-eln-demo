@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "langchain>=1.2.6",
     "langchain-anthropic>=1.3.1",
+    "langchain-community>=0.4.1",
     "langchain-google-genai>=4.2.0",
     "langchain-mistralai>=1.1.1",
     "langchain-ollama>=1.0.1",
@@ -14,6 +15,7 @@ dependencies = [
     "oold>=0.11.4",
     "opensemantic-lab>=0.6.1.post2000",
     "osw",
+    "pyjwt>=2.11.0",
     "python-dotenv>=1.2.1",
 ]
 
