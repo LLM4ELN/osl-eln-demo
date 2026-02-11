@@ -155,9 +155,14 @@ def model_supports_structured_output(llm: BaseChatModel, tools=None):
     """Check if the LLM model supports structured output"""
     if (
         hasattr(llm, "model_name")
-        and llm.model_name in ["gpt-oss-120b", "mistral-large-3"]
+        and llm.model_name in ["mistral-large-3"]
     ):
         return False
+    if (
+        hasattr(llm, "model_name")
+        and llm.model_name in ["GLM-4.7-Flash"]
+    ):
+        return True
     return _supports_provider_strategy(llm, tools)
 
 
