@@ -15,9 +15,11 @@ dependencies = [
     "oold>=0.11.4",
     "opensemantic-lab>=0.6.1.post2000",
     "osw",
+    "panelini",
     "pyjwt>=2.11.0",
     "python-dotenv>=1.2.1",
 ]
 
 [tool.uv.sources]
 osw = { git = "https://github.com/OpenSemanticLab/osw-python" }
+panelini = { git = "https://github.com/opensemanticworld/panelini", branch = "feat-visnetwork-incremental-updates" }
