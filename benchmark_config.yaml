@@ -1,25 +1,34 @@
 benchmark:
   agent_type:
     # - "iterative"
-    - "segmentation"
-  runs: 1
+    # - "segmentation"
+    - "multi_step"
+  runs: 3
   timeout: 900  # seconds per run
   parallel_models: true
-  parallel_runs: true
+  parallel_runs: false
   models:  # references model_name values from model_list
     - claude-sonnet-4-5
     - claude-haiku-4-5
     - claude-opus-4-5
+    #- deepseek-v3.2-speciale # error: timeout
     - deepseek-v3.2
+    #- deepseek-r1-0528 # error: timeout
     - cohere-command-a
-    - llama-4-maverick-17b-128e-instruct-fp8
-    - kimi-k2.5
-    - kimi-k2-thinking
+    - llama-4-maverick
+    #- kimi-k2.5 # slow & bad performance
+    #- kimi-k2-thinking # slow & bad performance
     - gpt-5.2-chat
     - gpt-5-nano
     - gpt-5-mini
+    - gpt-oss-120b
+    #- phi-4-mini-instruct # error: json-schema grammar not supported
+    #- phi-4-reasoning # error: json-schema grammar not supported
     - mistral-large-3
-    # - mistral-small-2503
+    - mistral-medium-2505
+    - mistral-small-2503
+    #- glm-4.7-flash # not deployed
+    - qwen-3-coder-next-q6_k-gguf
 
 # model configurations based on https://docs.litellm.ai/docs/proxy/configs
 model_list:
@@ -29,6 +38,7 @@ model_list:
       api_base: os.environ/ANTHROPIC_API_ENDPOINT
       api_key: os.environ/API_KEY
       api_version: "2024-02-15"
+      temperature: 0.0
     provider: azure-foundry-anthropic
     comment: works
 
@@ -38,6 +48,7 @@ model_list:
       api_base: os.environ/ANTHROPIC_API_ENDPOINT
       api_key: os.environ/API_KEY
       api_version: "2024-02-15"
+      temperature: 0.0
     provider: azure-foundry-anthropic
     comment: works
 
@@ -47,6 +58,7 @@ model_list:
       api_base: os.environ/ANTHROPIC_API_ENDPOINT
       api_key: os.environ/API_KEY
       api_version: "2024-02-15"
+      temperature: 0.0
     provider: azure-foundry-anthropic
     comment: works
 
@@ -55,6 +67,7 @@ model_list:
       model: deepseek-v3.2-speciale
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+      temperature: 0.0
     provider: azure-foundry
     comment: "error: timeout"
 
@@ -63,6 +76,7 @@ model_list:
       model: deepseek-v3.2
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+      temperature: 0.0
     provider: azure-foundry
     comment: works
 
@@ -71,6 +85,7 @@ model_list:
       model: cohere-command-a
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+      temperature: 0.0
     provider: azure-foundry
     comment: works
 
@@ -79,14 +94,15 @@ model_list:
       model: deepseek-r1-0528
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+      temperature: 0.0
     provider: azure-foundry
-    comment: "struggles with fillable properties"
 
   - model_name: llama-4-maverick
     litellm_params:
       model: llama-4-maverick-17b-128e-instruct-fp8
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+      temperature: 0.0
     provider: azure-foundry
     comment: works
 
@@ -95,6 +111,7 @@ model_list:
       model: kimi-k2.5
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+      temperature: 0.0
     provider: azure-foundry
 
   - model_name: kimi-k2-thinking
@@ -103,7 +120,7 @@ model_list:
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
     provider: azure-foundry
-    comment: works
+    comment: "reasoning model - no temperature override"
 
   - model_name: gpt-5.2-chat
     litellm_params:
@@ -126,13 +143,46 @@ model_list:
       api_key: os.environ/API_KEY
     provider: azure-foundry
 
+  - model_name: gpt-oss-120b
+    litellm_params:
+      model: gpt-oss-120b
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+      temperature: 0.0
+    provider: azure-foundry
+    comment: "error:  tool_choice 'required' is not supported for the model."
+
+  - model_name: phi-4-reasoning
+    litellm_params:
+      model: phi-4-reasoning
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+      temperature: 0.0
+    provider: azure-foundry
+
+  - model_name: phi-4-mini-instruct
+    litellm_params:
+      model: phi-4-mini-instruct
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+      temperature: 0.0
+    provider: azure-foundry
+
   - model_name: mistral-large-3
     litellm_params:
       model: mistral-large-3
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+      temperature: 0.0
     provider: azure-foundry-mistral
-    comment: "error: invalid input"
+
+  - model_name: mistral-medium-2505
+    litellm_params:
+      model: mistral-medium-2505
+      api_base: os.environ/API_ENDPOINT
+      api_key: os.environ/API_KEY
+      temperature: 0.0
+    provider: azure-foundry-mistral
 
   - model_name: mistral-small-2503
     litellm_params:
@@ -140,5 +190,19 @@ model_list:
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
       api_version: "2024-06-01"
+      temperature: 0.0
     provider: azure-foundry-mistral
-    comment: "error: 'tool_choice' does not support" 
+
+  - model_name: glm-4.7-flash
+    litellm_params:
+      model: GLM-4.7-Flash
+      api_base: os.environ/LLAMA_CPP_ENDPOINT
+      temperature: 0.0
+    provider: openai-compatible-api
+
+  - model_name: qwen-3-coder-next-q6_k-gguf
+    litellm_params:
+      model: Qwen-3-Coder-Next-Q6_K-GGUF
+      api_base: os.environ/LLAMA_CPP_ENDPOINT
+      temperature: 0.0
+    provider: openai-compatible-api
