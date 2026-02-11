@@ -126,6 +126,11 @@ def get_llm():
             model=environ.get("API_MODEL")
         )
 
+    # Apply temperature if set via environment
+    temp_str = environ.get("API_TEMPERATURE")
+    if temp_str is not None and hasattr(llm, "temperature"):
+        llm.temperature = float(temp_str)
+
     model_name = environ.get("API_MODEL")
 
     provider = environ.get("API_PROVIDER", "").lower()
