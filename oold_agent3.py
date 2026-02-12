@@ -33,6 +33,7 @@ from schema_catalog import (
     get_data_schema_inventory_markdown,
 )
 from util import (
+    add_max_length_constraints,
     modify_schema,
     post_process_llm_json_response,
     deep_copy,
@@ -64,9 +65,12 @@ class DetectedEntity(BaseModel):
     )
     description: str = Field(
         ...,
+        max_length=1000,
         description=(
-            "The relevant information about this entity from the prompt, "
-            "including all details that belong to this entity"
+            "A lossless summary of the relevant information about this "
+            "entity from the prompt, including key details that belong "
+            "to this entity. Be brief -- do not exceed the original "
+            "prompt's description length."
         ),
     )
 
@@ -598,13 +602,19 @@ class MultiStepAgent(BaseModel):
                             ),
                         }
                 else:
-                    # Literal property: type string
+                    # Literal property: type string with maxLength
                     prop_desc = (
                         properties[prop_name].get("description", "")
                         or f"Value for {prop_name}"
                     )
+                    pn_lower = prop_name.lower()
+                    if "name" in pn_lower or "label" in pn_lower:
+                        max_len = 200
+                    else:
+                        max_len = 1000
                     prop_schemas[prop_name] = {
                         "type": "string",
+                        "maxLength": max_len,
                         "description": prop_desc,
                     }
 
@@ -660,7 +670,8 @@ class MultiStepAgent(BaseModel):
             "You are an expert data extraction assistant. "
             "Extract property values from entity descriptions. "
             "For literal properties, provide the actual value from the "
-            "description. "
+            "description. Use concise, factual phrasing -- do not "
+            "elaborate, paraphrase at length beyond what is stated. "
             "For range properties (those with enum options), select the "
             "entity ID of the linked entity from the enum. "
             "You MUST fill ALL properties -- they are all required. "
@@ -786,6 +797,7 @@ class MultiStepAgent(BaseModel):
 
             try:
                 filtered = modify_schema(filtered)
+                filtered = add_max_length_constraints(filtered)
             except Exception as e:
                 print(
                     f"  Error modifying schema for [{entity.id}]: {e}"
@@ -850,6 +862,9 @@ class MultiStepAgent(BaseModel):
             "You always answer in valid JSON according to the provided "
             "schema. "
             "Fill ONLY the properties listed below with the given values. "
+            "Keep all string values concise: use the exact values provided "
+            "in the property hints without elaboration or paraphrasing "
+            " beyond what is stated. "
             "Do not invent any new information. "
             "Do not generate dummy or placeholder values. "
             "If you do not have enough information for a field, "

@@ -342,6 +342,48 @@ def post_process_llm_json_response(response_json):
     return cleaned_response
 
 
+def add_max_length_constraints(
+    schema, default_max=1000, name_max=200,
+):
+    """Add maxLength to string properties in a JSON schema if not present.
+
+    Properties with 'name' or 'label' in their key get name_max,
+    all other string properties get default_max.
+    Does not affect properties that already have maxLength or
+    have enum constraints.
+    """
+    properties = schema.get("properties", {})
+    for prop_name, prop_schema in properties.items():
+        if not isinstance(prop_schema, dict):
+            continue
+        prop_type = prop_schema.get("type")
+        # Only apply to plain string types, not enums or arrays
+        if prop_type == "string" and "enum" not in prop_schema:
+            if "maxLength" not in prop_schema:
+                pn_lower = prop_name.lower()
+                if "name" in pn_lower or "label" in pn_lower:
+                    prop_schema["maxLength"] = name_max
+                else:
+                    prop_schema["maxLength"] = default_max
+        # Recurse into nested objects
+        if prop_type == "object":
+            add_max_length_constraints(
+                prop_schema, default_max, name_max
+            )
+        # Recurse into array items
+        if prop_type == "array" and "items" in prop_schema:
+            items = prop_schema["items"]
+            if isinstance(items, dict):
+                if items.get("type") == "object":
+                    add_max_length_constraints(
+                        items, default_max, name_max
+                    )
+                elif items.get("type") == "string" and "enum" not in items:
+                    if "maxLength" not in items:
+                        items["maxLength"] = default_max
+    return schema
+
+
 def schema_to_markdown(schema):
     """Convert JSON schema to a markdown string for prompt inclusion"""
     import json  # noqa: E402
