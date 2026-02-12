@@ -206,3 +206,10 @@ model_list:
       api_base: os.environ/LLAMA_CPP_ENDPOINT
       temperature: 0.0
     provider: openai-compatible-api
+
+  - model_name: ministral-3-14b-instruct-2512
+    litellm_params:
+      model: ministral-3-14b-instruct-2512
+      api_base: os.environ/LLAMA_CPP_ENDPOINT
+      temperature: 0.0
+    provider: vllm
