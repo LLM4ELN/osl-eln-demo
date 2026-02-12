@@ -83,6 +83,41 @@ def render_header(data: list, source_path: Path) -> str:
     )
 
 
+def render_model_config_table(data: list) -> str:
+    """Render a table of model configurations (provider, temperature, etc.)."""
+    # Collect all litellm_params keys across models (excluding api_base which is just a URL)
+    interesting_keys = set()
+    for m in data:
+        cfg = m.get("model_config", {})
+        params = cfg.get("litellm_params", {})
+        for k in params:
+            if k not in ("model", "api_base", "api_key"):
+                interesting_keys.add(k)
+
+    if not interesting_keys:
+        return ""
+
+    sorted_keys = sorted(interesting_keys)
+    header_parts = ["Model", "Provider"] + sorted_keys
+    sep_parts = ["---"] * len(header_parts)
+    lines = [
+        "## Model Configuration\n",
+        "| " + " | ".join(header_parts) + " |",
+        "| " + " | ".join(sep_parts) + " |",
+    ]
+    for m in data:
+        model = m["model"]
+        cfg = m.get("model_config", {})
+        provider = cfg.get("provider", "—")
+        params = cfg.get("litellm_params", {})
+        cells = [model, provider]
+        for k in sorted_keys:
+            val = params.get(k)
+            cells.append(str(val) if val is not None else "—")
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines) + "\n"
+
+
 def render_summary_table(data: list) -> str:
     lines = [
         "## Summary\n",
@@ -265,6 +300,7 @@ def generate_report(data: list, source_path: Path) -> str:
     labels = _build_chart_labels(data)
     parts = [
         render_header(data, source_path),
+        render_model_config_table(data),
         render_summary_table(data),
         render_errors_chart(data, labels),
         render_time_chart(data, labels),

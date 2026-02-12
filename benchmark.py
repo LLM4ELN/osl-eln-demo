@@ -141,6 +141,8 @@ class ModelBenchmarkResult:
     """Results from all runs of a single model."""
     model: str
     agent_type: str = "iterative"
+    model_config: Dict[str, Any] = field(default_factory=dict)
+    """Model configuration from benchmark_config.yaml (litellm_params, provider, etc.)."""
     runs: List[BenchmarkResult] = field(default_factory=list)
 
 
@@ -684,7 +686,21 @@ def _run_benchmarks_for_model(
     """
     _apply_model_config(model_config)
     model = model_config["model_name"]
-    model_result = ModelBenchmarkResult(model=model, agent_type=agent_type)
+
+    # Store config for export, stripping secrets
+    safe_config = {
+        k: v for k, v in model_config.items()
+        if k != "litellm_params"
+    }
+    params = model_config.get("litellm_params", {})
+    safe_config["litellm_params"] = {
+        k: v for k, v in params.items()
+        if k not in ("api_key",)
+    }
+
+    model_result = ModelBenchmarkResult(
+        model=model, agent_type=agent_type, model_config=safe_config
+    )
 
     if run_runs_parallel:
         executor = ThreadPoolExecutor(max_workers=n_runs)
