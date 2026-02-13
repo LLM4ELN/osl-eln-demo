@@ -199,7 +199,7 @@ def lookup_excact_matching_entity(
             """Result of entity matching."""
             decision: Literal["no_match", "match", "match_with_update"]
             osw_id: str = ""  # Empty for no_match
-            explanation: str
+            explanation: str = Field(max_length=500)
 
         step1_prompt = (
             "Check if one of the candidate entities matches the given "
@@ -208,7 +208,8 @@ def lookup_excact_matching_entity(
             "- 'match': A candidate matches exactly (no new info)\n"
             "- 'match_with_update': A candidate matches but the description "
             "has additional info (new fields, relationships, attributes)\n\n"
-            "Include the osw_id (e.g., 'Item:OSWxxx') for match/match_with_update."
+            "Include the osw_id (e.g., 'Item:OSWxxx') for match/match_with_update. "
+            "Provide a brief explanation for your decision in the 'explanation' field. "
         )
 
         candidates_str = "\n".join([

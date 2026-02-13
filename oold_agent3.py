@@ -122,6 +122,9 @@ Analyze the following description and identify all distinct entities:
 
 Return a structured list of all entities found with their ids, schema paths, \
 and descriptions.\
+The description for each entity should be a lossless summary of all relevant information \
+about that entity from the prompt, in order to identify it uniquely. \
+Be brief -- do not exceed the original prompt's description.\
 """
 
 
