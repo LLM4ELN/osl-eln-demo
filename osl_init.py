@@ -224,6 +224,12 @@ def lookup_excact_matching_entity(
             f"{candidates_str}"
         )
 
+        # Serialize schema into prompt so grammar-driven engines
+        # (vLLM, llama.cpp) see description/maxLength annotations
+        schema = MatchDecision.model_json_schema()
+        schema_str = json.dumps(schema, indent=2)
+        user_prompt += f"\n\n## Output Schema\n\n{schema_str}"
+
         llm = get_llm()
         response_format = get_response_format(llm, target_data_model=MatchDecision)
         agent = create_agent(model=llm, response_format=response_format)

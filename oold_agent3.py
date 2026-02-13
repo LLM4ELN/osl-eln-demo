@@ -286,6 +286,16 @@ class MultiStepAgent(BaseModel):
         schema = SchemaDetectionResult.model_json_schema()
         schema = modify_schema(schema)
 
+        # Serialize schema into prompt so grammar-driven engines
+        # (vLLM, llama.cpp) see description/maxLength annotations
+        schema_str = json.dumps(schema, indent=2)
+        user_prompt += f"\n\n## Output Schema\n\n{schema_str}"
+
+        # Serialize schema into prompt so grammar-driven engines
+        # (vLLM, llama.cpp) see description/maxLength annotations
+        schema_str = json.dumps(schema, indent=2)
+        user_prompt += f"\n\n## Output Schema\n\n{schema_str}"
+
         llm = self._get_llm()
         if model_supports_structured_output(llm, tools=[]):
             response_format = ProviderStrategy(schema=schema, strict=True)
@@ -681,14 +691,19 @@ class MultiStepAgent(BaseModel):
             "Do NOT invent information not present in the descriptions."
         )
 
+        extraction_schema = modify_schema(extraction_schema)
+
+        # Serialize schema into prompt so grammar-driven engines
+        # (vLLM, llama.cpp) see description/maxLength annotations
+        schema_str = json.dumps(extraction_schema, indent=2)
+
         user_prompt = (
             f"## Original Description\n\n{original_prompt}\n\n"
             f"## Detected Entities\n\n{entity_ref}\n\n"
             f"Fill all listed properties for each entity based on the "
-            f"original description and entity plan above."
+            f"original description and entity plan above.\n\n"
+            f"## Output Schema\n\n{schema_str}"
         )
-
-        extraction_schema = modify_schema(extraction_schema)
 
         llm = self._get_llm()
         if model_supports_structured_output(llm, tools=[]):
