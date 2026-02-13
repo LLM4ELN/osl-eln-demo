@@ -102,7 +102,8 @@ unless the description warrants it).
 and consolidate all information about it into one description.
 4. Entities should be linked via range properties where the schema defines them.
 5. You MUST use full schema paths from the valid list below.
-6. Only create entities for which you have actual information in the prompt. \
+6. Create entities for which you have actual information in the prompt, \
+at least a name / label.
 Do not invent placeholder entities.
 7. Assign each entity a unique id like 'entity_11', 'entity_12', etc.
 
