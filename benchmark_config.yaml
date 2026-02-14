@@ -28,7 +28,12 @@ benchmark:
     - mistral-medium-2505
     - mistral-small-2503
     #- glm-4.7-flash # not deployed
-    - qwen-3-coder-next-q6_k-gguf
+    #- qwen-3-coder-next-q6_k-gguf # not deployed
+    #- ministral-3-14b-instruct-2512 # not deployed
+    #- gpt-oss-120b-vllm # not deployed
+    - mistral-small-3.2-24b-instruct-2506
+    #- ministral-3:14b # local
+    #- mistral:7b # local
 
 # model configurations based on https://docs.litellm.ai/docs/proxy/configs
 model_list:
@@ -211,5 +216,32 @@ model_list:
     litellm_params:
       model: ministral-3-14b-instruct-2512
       api_base: os.environ/LLAMA_CPP_ENDPOINT
+      temperature: 0.1
+    provider: vllm
+
+  - model_name: gpt-oss-120b-vllm
+    litellm_params:
+      model: openai/gpt-oss-120b
+      api_base: os.environ/VLLM_ENDPOINT
       temperature: 0.0
     provider: vllm
+
+  - model_name: mistral-small-3.2-24b-instruct-2506
+    litellm_params:
+      model: mistralai/Mistral-Small-3.2-24B-Instruct-2506
+      api_base: os.environ/VLLM_ENDPOINT
+      temperature: 0.0
+    provider: vllm
+
+  # local ollama models
+  - model_name: mistral:7b
+    litellm_params:
+      model: mistral:7b
+      temperature: 0.0
+    provider: ollama
+
+  - model_name: ministral-3:14b
+    litellm_params:
+      model: ministral-3:14b
+      temperature: 0.0
+    provider: ollama
