@@ -9,6 +9,7 @@ Uses a 5-step pipeline:
 """
 
 import json
+import os
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -40,6 +41,11 @@ from util import (
     remove_empty,
     remove_nulls,
 )
+
+def _limit_str_fields() -> bool:
+    """Check if maxLength constraints should be added to string fields."""
+    return os.environ.get("LIMIT_STR_FIELDS", "false") == "true"
+
 
 # ---------------------------------------------------------------------------
 # Step 1: Schema Detection Models (static JSON-SCHEMA)
@@ -286,6 +292,8 @@ class MultiStepAgent(BaseModel):
 
         schema = SchemaDetectionResult.model_json_schema()
         schema = modify_schema(schema)
+        if _limit_str_fields():
+            schema = add_max_length_constraints(schema)
 
         # Serialize schema into prompt so grammar-driven engines
         # (vLLM, llama.cpp) see description/maxLength annotations
@@ -616,20 +624,24 @@ class MultiStepAgent(BaseModel):
                             ),
                         }
                 else:
-                    # Literal property: type string with maxLength
+                    # Literal property: type string
                     prop_desc = (
                         properties[prop_name].get("description", "")
                         or f"Value for {prop_name}"
                     )
-                    pn_lower = prop_name.lower()
-                    if "name" in pn_lower or "label" in pn_lower:
-                        max_len = 200
-                    else:
-                        max_len = 1000
-                    prop_schemas[prop_name] = {
+                    prop_schema = {
                         "type": "string",
-                        "maxLength": max_len,
                         "description": prop_desc,
+                    }
+                    if _limit_str_fields():
+                        pn_lower = prop_name.lower()
+                        if "name" in pn_lower \
+                                or "label" in pn_lower:
+                            prop_schema["maxLength"] = 200
+                        else:
+                            prop_schema["maxLength"] = 1000
+                    prop_schemas[prop_name] = {
+                        **prop_schema,
                     }
 
             if prop_schemas:
@@ -816,7 +828,10 @@ class MultiStepAgent(BaseModel):
 
             try:
                 filtered = modify_schema(filtered)
-                filtered = add_max_length_constraints(filtered)
+                if _limit_str_fields():
+                    filtered = add_max_length_constraints(
+                        filtered
+                    )
             except Exception as e:
                 print(
                     f"  Error modifying schema for [{entity.id}]: {e}"

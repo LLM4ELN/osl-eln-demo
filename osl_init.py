@@ -199,7 +199,7 @@ def lookup_excact_matching_entity(
             """Result of entity matching."""
             decision: Literal["no_match", "match", "match_with_update"]
             osw_id: str = ""  # Empty for no_match
-            explanation: str = Field(max_length=500)
+            explanation: str = ""
 
         step1_prompt = (
             "Check if one of the candidate entities matches the given "
@@ -227,6 +227,10 @@ def lookup_excact_matching_entity(
         # Serialize schema into prompt so grammar-driven engines
         # (vLLM, llama.cpp) see description/maxLength annotations
         schema = MatchDecision.model_json_schema()
+        if environ.get("LIMIT_STR_FIELDS", "false") == "true":
+            props = schema.get("properties", {})
+            if "explanation" in props:
+                props["explanation"]["maxLength"] = 500
         schema_str = json.dumps(schema, indent=2)
         user_prompt += f"\n\n## Output Schema\n\n{schema_str}"
 

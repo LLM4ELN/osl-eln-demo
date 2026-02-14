@@ -69,6 +69,13 @@ def _apply_model_config(model_config: Dict[str, Any]):
     # provider lives outside litellm_params
     if "provider" in model_config:
         os.environ["API_PROVIDER"] = model_config["provider"]
+    # optional per-model flag to enforce maxLength on string fields
+    if "limit_str_fields" in model_config:
+        os.environ["LIMIT_STR_FIELDS"] = str(
+            model_config["limit_str_fields"]
+        ).lower()
+    else:
+        os.environ.pop("LIMIT_STR_FIELDS", None)
 
 
 def create_benchmark_agent(agent_type: str = "iterative"):
