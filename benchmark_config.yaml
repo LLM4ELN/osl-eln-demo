@@ -1,3 +1,6 @@
+# Benchmark configuration for OOLD agent evaluation
+# model stats from https://models.dev/api.json (2026-02-13)
+
 benchmark:
   agent_type:
     # - "iterative"
@@ -45,6 +48,10 @@ model_list:
       api_version: "2024-02-15"
       temperature: 0.0
     provider: azure-foundry-anthropic
+    db_model_id: claude-sonnet-4-5
+    provider_id: azure
+    price_per_million_token_in: 3
+    price_per_million_token_out: 15
     comment: works
 
   - model_name: claude-haiku-4-5
@@ -55,6 +62,10 @@ model_list:
       api_version: "2024-02-15"
       temperature: 0.0
     provider: azure-foundry-anthropic
+    db_model_id: claude-haiku-4-5
+    provider_id: azure
+    price_per_million_token_in: 1
+    price_per_million_token_out: 5
     comment: works
 
   - model_name: claude-opus-4-5
@@ -65,6 +76,10 @@ model_list:
       api_version: "2024-02-15"
       temperature: 0.0
     provider: azure-foundry-anthropic
+    db_model_id: claude-opus-4-5
+    provider_id: azure
+    price_per_million_token_in: 5
+    price_per_million_token_out: 25
     comment: works
 
   - model_name: deepseek-v3.2-speciale
@@ -74,6 +89,10 @@ model_list:
       api_key: os.environ/API_KEY
       temperature: 0.0
     provider: azure-foundry
+    db_model_id: deepseek-v3.2-speciale
+    provider_id: azure
+    price_per_million_token_in: 0.58
+    price_per_million_token_out: 1.68
     comment: "error: timeout"
 
   - model_name: deepseek-v3.2
@@ -83,6 +102,10 @@ model_list:
       api_key: os.environ/API_KEY
       temperature: 0.0
     provider: azure-foundry
+    db_model_id: deepseek-v3.2
+    provider_id: azure
+    price_per_million_token_in: 0.58
+    price_per_million_token_out: 1.68
     comment: works
 
   - model_name: cohere-command-a
@@ -92,6 +115,10 @@ model_list:
       api_key: os.environ/API_KEY
       temperature: 0.0
     provider: azure-foundry
+    db_model_id: cohere-command-a
+    provider_id: azure
+    price_per_million_token_in: 2.5
+    price_per_million_token_out: 10
     comment: works
 
   - model_name: deepseek-r1-0528
@@ -101,6 +128,10 @@ model_list:
       api_key: os.environ/API_KEY
       temperature: 0.0
     provider: azure-foundry
+    db_model_id: deepseek-r1-0528
+    provider_id: azure
+    price_per_million_token_in: 1.35
+    price_per_million_token_out: 5.4
 
   - model_name: llama-4-maverick
     litellm_params:
@@ -109,6 +140,10 @@ model_list:
       api_key: os.environ/API_KEY
       temperature: 0.0
     provider: azure-foundry
+    db_model_id: llama-4-maverick-17b-128e-instruct-fp8
+    provider_id: azure
+    price_per_million_token_in: 0.25
+    price_per_million_token_out: 1
     comment: works
 
   - model_name: kimi-k2.5
@@ -118,6 +153,10 @@ model_list:
       api_key: os.environ/API_KEY
       temperature: 0.0
     provider: azure-foundry
+    db_model_id: kimi-k2.5
+    provider_id: azure
+    price_per_million_token_in: 0.6
+    price_per_million_token_out: 3
 
   - model_name: kimi-k2-thinking
     litellm_params:
@@ -125,6 +164,10 @@ model_list:
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
     provider: azure-foundry
+    db_model_id: kimi-k2-thinking
+    provider_id: azure
+    price_per_million_token_in: 0.6
+    price_per_million_token_out: 2.5
     comment: "reasoning model - no temperature override"
 
   - model_name: gpt-5.2-chat
@@ -133,6 +176,10 @@ model_list:
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
     provider: azure-foundry
+    db_model_id: gpt-5.2-chat
+    provider_id: azure
+    price_per_million_token_in: 1.75
+    price_per_million_token_out: 14
 
   - model_name: gpt-5-nano
     litellm_params:
@@ -140,6 +187,10 @@ model_list:
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
     provider: azure-foundry
+    db_model_id: gpt-5-nano
+    provider_id: azure
+    price_per_million_token_in: 0.05
+    price_per_million_token_out: 0.4
 
   - model_name: gpt-5-mini
     litellm_params:
@@ -147,6 +198,10 @@ model_list:
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
     provider: azure-foundry
+    db_model_id: gpt-5-mini
+    provider_id: azure
+    price_per_million_token_in: 0.25
+    price_per_million_token_out: 2
 
   - model_name: gpt-oss-120b
     litellm_params:
@@ -164,6 +219,10 @@ model_list:
       api_key: os.environ/API_KEY
       temperature: 0.0
     provider: azure-foundry
+    db_model_id: phi-4-reasoning
+    provider_id: azure
+    price_per_million_token_in: 0.125
+    price_per_million_token_out: 0.5
 
   - model_name: phi-4-mini-instruct
     litellm_params:
@@ -172,6 +231,10 @@ model_list:
       api_key: os.environ/API_KEY
       temperature: 0.0
     provider: azure-foundry
+    db_model_id: phi-4-mini
+    provider_id: azure
+    price_per_million_token_in: 0.075
+    price_per_million_token_out: 0.3
 
   - model_name: mistral-large-3
     litellm_params:
@@ -180,6 +243,10 @@ model_list:
       api_key: os.environ/API_KEY
       temperature: 0.0
     provider: azure-foundry-mistral
+    db_model_id: mistral-large-2411
+    provider_id: azure
+    price_per_million_token_in: 2
+    price_per_million_token_out: 6
 
   - model_name: mistral-medium-2505
     litellm_params:
@@ -188,6 +255,10 @@ model_list:
       api_key: os.environ/API_KEY
       temperature: 0.0
     provider: azure-foundry-mistral
+    db_model_id: mistral-medium-2505
+    provider_id: azure
+    price_per_million_token_in: 0.4
+    price_per_million_token_out: 2
 
   - model_name: mistral-small-2503
     litellm_params:
@@ -197,6 +268,10 @@ model_list:
       api_version: "2024-06-01"
       temperature: 0.0
     provider: azure-foundry-mistral
+    db_model_id: mistral-small-2503
+    provider_id: azure
+    price_per_million_token_in: 0.1
+    price_per_million_token_out: 0.3
 
   - model_name: glm-4.7-flash
     litellm_params:

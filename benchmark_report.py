@@ -118,23 +118,61 @@ def render_model_config_table(data: list) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _has_cost_data(data: list) -> bool:
+    """Check if any model has cost > 0."""
+    for m in data:
+        for run in m.get("runs", []):
+            if run.get("cost", 0) > 0:
+                return True
+    return False
+
+
 def render_summary_table(data: list) -> str:
+    show_cost = _has_cost_data(data)
+    header = (
+        "| Model | Passed | Avg Errors | Avg Time (s) "
+        "| Avg In Tokens | Avg Out Tokens | Avg Tok/s |"
+    )
+    sep = "|---|---|---|---|---|---|---|"
+    if show_cost:
+        header += " Avg Cost |"
+        sep += "---|"
     lines = [
         "## Summary\n",
-        "| Model | Passed | Avg Errors | Avg Time (s) |",
-        "|---|---|---|---|",
+        header,
+        sep,
     ]
     for m in data:
         model = m["model"]
         runs = m["runs"]
         if not runs:
-            lines.append(f"| {model} | 0/0 | — | — |")
+            empty = f"| {model} | 0/0 | — | — | — | — | — |"
+            if show_cost:
+                empty += " — |"
+            lines.append(empty)
             continue
         n = len(runs)
         pass_count = sum(1 for r in runs if r["passed"])
         avg_errors = _avg([r["total_errors"] for r in runs])
         avg_time = _avg([r["total_time"] for r in runs])
-        lines.append(f"| {model} | {pass_count}/{n} | {avg_errors:.1f} | {avg_time:.1f} |")
+        avg_in = _avg([r.get("input_tokens", 0) for r in runs])
+        avg_out = _avg([r.get("output_tokens", 0) for r in runs])
+        avg_tps = _avg([
+            r.get("tokens_per_second", 0) for r in runs
+        ])
+        row = (
+            f"| {model} | {pass_count}/{n} "
+            f"| {avg_errors:.1f} | {avg_time:.1f} "
+            f"| {avg_in:.0f} | {avg_out:.0f} "
+            f"| {avg_tps:.1f} |"
+        )
+        if show_cost:
+            avg_cost = _avg([r.get("cost", 0) for r in runs])
+            if avg_cost > 0:
+                row += f" ${avg_cost:.4f} |"
+            else:
+                row += " — |"
+        lines.append(row)
     return "\n".join(lines) + "\n"
 
 
@@ -234,6 +272,71 @@ def render_time_chart(data: list, labels: list[str]) -> str:
     return "\n".join(lines)
 
 
+def render_tokens_chart(data: list, labels: list[str]) -> str:
+    values = []
+    for m in data:
+        runs = m["runs"]
+        values.append(
+            _avg([r.get("total_tokens", 0) for r in runs])
+            if runs else 0
+        )
+    lines = [
+        "## Tokens per Model\n",
+        "```mermaid",
+        MERMAID_CHART,
+        '  title "Total Tokens per Model"',
+        _mermaid_x_axis(labels),
+        '  y-axis "Tokens"',
+        f'  bar [{", ".join(f"{v:.0f}" for v in values)}]',
+        "```\n",
+    ]
+    return "\n".join(lines)
+
+
+def render_token_rate_chart(data: list, labels: list[str]) -> str:
+    values = []
+    for m in data:
+        runs = m["runs"]
+        values.append(
+            _avg([r.get("tokens_per_second", 0) for r in runs])
+            if runs else 0
+        )
+    lines = [
+        "## Token Rate per Model\n",
+        "```mermaid",
+        MERMAID_CHART,
+        '  title "Tokens per Second"',
+        _mermaid_x_axis(labels),
+        '  y-axis "Tok/s"',
+        f'  bar [{", ".join(f"{v:.1f}" for v in values)}]',
+        "```\n",
+    ]
+    return "\n".join(lines)
+
+
+def render_cost_chart(data: list, labels: list[str]) -> str:
+    if not _has_cost_data(data):
+        return ""
+    values = []
+    for m in data:
+        runs = m["runs"]
+        values.append(
+            _avg([r.get("cost", 0) for r in runs])
+            if runs else 0
+        )
+    lines = [
+        "## Cost per Model\n",
+        "```mermaid",
+        MERMAID_CHART,
+        '  title "Avg Cost per Model ($)"',
+        _mermaid_x_axis(labels),
+        '  y-axis "USD"',
+        f'  bar [{", ".join(f"{v:.4f}" for v in values)}]',
+        "```\n",
+    ]
+    return "\n".join(lines)
+
+
 def render_chapter_errors_chart(
     data: list, chapter_names: list[str], labels: list[str]
 ) -> str:
@@ -304,6 +407,9 @@ def generate_report(data: list, source_path: Path) -> str:
         render_summary_table(data),
         render_errors_chart(data, labels),
         render_time_chart(data, labels),
+        render_tokens_chart(data, labels),
+        render_token_rate_chart(data, labels),
+        render_cost_chart(data, labels),
         render_chapter_errors_chart(data, chapter_names, labels),
         render_chapter_table(data, chapter_names),
         render_error_type_table(data),

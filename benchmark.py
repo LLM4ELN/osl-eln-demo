@@ -141,6 +141,11 @@ class BenchmarkResult:
     passed: bool = True
     error_message: Optional[str] = None
     """Set when the entire run crashed with an unhandled exception."""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    tokens_per_second: float = 0.0
+    cost: float = 0.0
 
 
 @dataclass
@@ -610,8 +615,31 @@ def run_benchmark(
     result.passed = result.total_errors == 0
 
     result.total_time = time.time() - total_start
+
+    # Capture token usage from agent
+    if hasattr(agent, "token_usage"):
+        result.input_tokens = agent.token_usage.get(
+            "input_tokens", 0
+        )
+        result.output_tokens = agent.token_usage.get(
+            "output_tokens", 0
+        )
+        result.total_tokens = agent.token_usage.get(
+            "total_tokens", 0
+        )
+
+    if result.total_tokens > 0 and result.total_time > 0:
+        result.tokens_per_second = (
+            result.total_tokens / result.total_time
+        )
+
     if verbose:
         print(f"\nTotal benchmark time: {result.total_time:.2f}s")
+        print(
+            f"Tokens: {result.input_tokens} in / "
+            f"{result.output_tokens} out / "
+            f"{result.total_tokens} total"
+        )
 
     return result
 
@@ -769,6 +797,16 @@ def _run_benchmarks_for_model(
                 f"--- Run {run_idx + 1} finished: {status}, "
                 f"{result.total_errors} errors, "
                 f"{result.total_time:.2f}s ---"
+            )
+
+    # Calculate cost per run if pricing is configured
+    price_in = model_config.get("price_per_million_token_in")
+    price_out = model_config.get("price_per_million_token_out")
+    if price_in is not None and price_out is not None:
+        for run in model_result.runs:
+            run.cost = (
+                run.input_tokens * price_in / 1_000_000
+                + run.output_tokens * price_out / 1_000_000
             )
 
     return model_result

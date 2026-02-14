@@ -47,6 +47,22 @@ def _limit_str_fields() -> bool:
     return os.environ.get("LIMIT_STR_FIELDS", "false") == "true"
 
 
+def _extract_token_usage(result: dict) -> dict:
+    """Extract token usage from agent.invoke() result messages."""
+    input_tokens = 0
+    output_tokens = 0
+    for msg in result.get("messages", []):
+        um = getattr(msg, "usage_metadata", None)
+        if um:
+            input_tokens += um.get("input_tokens", 0)
+            output_tokens += um.get("output_tokens", 0)
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Step 1: Schema Detection Models (static JSON-SCHEMA)
 # ---------------------------------------------------------------------------
@@ -71,7 +87,6 @@ class DetectedEntity(BaseModel):
     )
     description: str = Field(
         ...,
-        max_length=1000,
         description=(
             "A lossless summary of the relevant information about this "
             "entity from the prompt, including key details that belong "
@@ -162,6 +177,15 @@ class MultiStepAgent(BaseModel):
     entities: Dict[str, Any] = Field(default_factory=dict)
     """Constructed OswBaseModel instances keyed by IRI."""
 
+    token_usage: Dict[str, int] = Field(
+        default_factory=lambda: {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+        }
+    )
+    """Accumulated token usage across all pipeline steps."""
+
     model_config = {"arbitrary_types_allowed": True}
 
     def __init__(self, **data):
@@ -174,6 +198,13 @@ class MultiStepAgent(BaseModel):
         if self.llm is None:
             object.__setattr__(self, "llm", get_llm())
         return self.llm
+
+    def _accumulate_tokens(self, result: dict):
+        """Add token usage from an agent.invoke() result."""
+        usage = _extract_token_usage(result)
+        self.token_usage["input_tokens"] += usage["input_tokens"]
+        self.token_usage["output_tokens"] += usage["output_tokens"]
+        self.token_usage["total_tokens"] += usage["total_tokens"]
 
     # ------------------------------------------------------------------
     # Schema name validation (shared with oold_agent2)
@@ -323,6 +354,7 @@ class MultiStepAgent(BaseModel):
             ]
         })
         elapsed = time.time() - t0
+        self._accumulate_tokens(result)
 
         if "structured_response" not in result:
             print(f"Error: No structured_response in result: {result}")
@@ -498,6 +530,7 @@ class MultiStepAgent(BaseModel):
             }
 
         elapsed = time.time() - t0
+        self._accumulate_tokens(result)
 
         if "structured_response" not in result:
             print(f"Error: No structured_response: {result}")
@@ -743,6 +776,7 @@ class MultiStepAgent(BaseModel):
             return {}
 
         elapsed = time.time() - t0
+        self._accumulate_tokens(result)
 
         if "structured_response" not in result:
             print(f"Error: No structured_response: {result}")
@@ -855,6 +889,7 @@ class MultiStepAgent(BaseModel):
             return None
 
         t0 = time.time()
+        self._step4_token_buf = []
 
         with ThreadPoolExecutor() as executor:
             futures = {
@@ -871,6 +906,12 @@ class MultiStepAgent(BaseModel):
                 if result is not None:
                     eid, result_dict, schema_cls, entity_uuid = result
                     results[eid] = (result_dict, schema_cls, entity_uuid)
+
+        # Accumulate tokens from parallel Step 4 calls
+        for usage in self._step4_token_buf:
+            self.token_usage["input_tokens"] += usage["input_tokens"]
+            self.token_usage["output_tokens"] += usage["output_tokens"]
+            self.token_usage["total_tokens"] += usage["total_tokens"]
 
         elapsed = time.time() - t0
         print(f"  {len(results)} entities constructed in {elapsed:.2f}s")
@@ -951,6 +992,10 @@ class MultiStepAgent(BaseModel):
                 print(f"  Error invoking agent for [{entity_id}]: {e}")
                 return None
 
+            # Track tokens (accumulated in main thread)
+            usage = _extract_token_usage(result)
+            self._step4_token_buf.append(usage)
+
             if "structured_response" not in result:
                 print(
                     f"  Error: No structured_response "
@@ -1014,6 +1059,7 @@ class MultiStepAgent(BaseModel):
                 vector_store=self.vector_store,
                 description=description,
                 llm_judge=self.use_llm_judge,
+                token_accumulator=self.token_usage,
             )
 
             if lookup_result is not None and lookup_result.osw_id:
@@ -1120,6 +1166,11 @@ class MultiStepAgent(BaseModel):
         Returns dict mapping entity IRI -> OswBaseModel instance.
         """
         self.entities = {}
+        self.token_usage = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+        }
 
         # Step 1: Detect entities and schemas
         detected_entities = self._step1_detect_entities(prompt)

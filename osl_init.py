@@ -168,7 +168,8 @@ def build_vector_store():
 
 
 def lookup_excact_matching_entity(
-    vector_store, description, llm_judge=False, debug=False
+    vector_store, description, llm_judge=False, debug=False,
+    token_accumulator=None,
 ) -> LookupResult | None:
     """lookup an entity by its description using the vector store
     and return the entity's title / ID if a good match is found.
@@ -238,10 +239,28 @@ def lookup_excact_matching_entity(
         response_format = get_response_format(llm, target_data_model=MatchDecision)
         agent = create_agent(model=llm, response_format=response_format)
 
-        step1_response = agent.invoke({"messages": [
+        step1_result = agent.invoke({"messages": [
             {"role": "system", "content": step1_prompt},
             {"role": "user", "content": user_prompt}
-        ]})["structured_response"]
+        ]})
+
+        # Accumulate token usage if a collector was provided
+        if token_accumulator is not None:
+            for msg in step1_result.get("messages", []):
+                um = getattr(msg, "usage_metadata", None)
+                if um:
+                    token_accumulator["input_tokens"] += (
+                        um.get("input_tokens", 0)
+                    )
+                    token_accumulator["output_tokens"] += (
+                        um.get("output_tokens", 0)
+                    )
+                    token_accumulator["total_tokens"] += (
+                        um.get("input_tokens", 0)
+                        + um.get("output_tokens", 0)
+                    )
+
+        step1_response = step1_result["structured_response"]
 
         decision = MatchDecision.model_validate(step1_response)
         print(f"Step 1 - Match Decision: {decision}")
