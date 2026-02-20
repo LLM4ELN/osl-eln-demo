@@ -15,6 +15,7 @@ import panel as pn
 from panelini import Panelini
 from panelini.panels.visnetwork import VisNetwork
 
+from dummy_backend import DummyBackend
 from oold_agent3 import MultiStepAgent
 from schema_catalog import get_cached_inventory
 
@@ -119,7 +120,7 @@ class GraphState:
                     or node.get("type") != old.get("type")
                 ):
                     actions.append({"action": "updateNode", **node})
-                    updated_node_ids.append(nid)
+                updated_node_ids.append(nid)
 
         # -- edges ----------------------------------------------------------
         new_edge_keys: list = []
@@ -129,11 +130,14 @@ class GraphState:
                 new_edge_keys.append(edge_key)
 
         # -- state updates --------------------------------------------------
+        # All nodes from this iteration are "modified" (created or revisited).
+        # Only nodes from *previous* iterations not in the current batch
+        # are "stored".
         modified_node_ids = created_node_ids + updated_node_ids
         stored_ids = [
             nid
-            for nid in new_nodes
-            if nid not in modified_node_ids and nid in self.current_nodes
+            for nid in self.current_nodes
+            if nid not in modified_node_ids and nid not in created_node_ids
         ]
         if stored_ids:
             actions.append(
@@ -199,6 +203,7 @@ def _process_single_value(
     nodes: Dict[str, dict],
     edges: Dict[Tuple[str, str, str], dict],
     show_literals: bool = False,
+    existing_nodes: Dict[str, dict] | None = None,
 ) -> None:
     """Turn a single scalar/string value into nodes + edges."""
     if value is None or isinstance(value, dict):
@@ -207,8 +212,12 @@ def _process_single_value(
     str_val = str(value)
 
     if IRI_PATTERN.match(str_val):
-        # Range reference -> link to existing or placeholder node
-        if str_val not in nodes:
+        # Range reference -> link to existing or placeholder node.
+        # Only create a placeholder if the node is unknown in both the
+        # current batch *and* the already-committed graph state.
+        if str_val not in nodes and (
+            existing_nodes is None or str_val not in existing_nodes
+        ):
             nodes[str_val] = {"id": str_val, "label": str_val, "type": "instance"}
         edge_key = (entity_id, str_val, key)
         edges[edge_key] = {"from": entity_id, "to": str_val, "label": key}
@@ -224,6 +233,7 @@ def _process_single_value(
 def build_graph_from_entities(
     entities: Dict[str, Any],
     show_literals: bool = SHOW_LITERAL_NODES,
+    existing_nodes: Dict[str, dict] | None = None,
 ) -> Tuple[Dict[str, dict], Dict[Tuple[str, str, str], dict]]:
     """Convert agent entities into flat node/edge dicts for the graph.
 
@@ -231,6 +241,9 @@ def build_graph_from_entities(
         entities: IRI -> OswBaseModel mapping from the agent.
         show_literals: If ``True``, create leaf nodes for literal property
             values.  Defaults to ``SHOW_LITERAL_NODES`` (``False``).
+        existing_nodes: Nodes already committed to the graph from previous
+            invocations.  Used to avoid creating placeholder nodes that
+            would overwrite proper labels.
 
     Returns ``(nodes, edges)`` where *nodes* is keyed by node-id and
     *edges* is keyed by ``(from, to, label)`` tuples.
@@ -275,12 +288,12 @@ def build_graph_from_entities(
 
             if isinstance(value, list):
                 for item in value:
-                    _process_single_value(iri, key, item, nodes, edges, show_literals)
+                    _process_single_value(iri, key, item, nodes, edges, show_literals, existing_nodes)
             elif isinstance(value, dict):
                 # skip objects for now
                 continue
             else:
-                _process_single_value(iri, key, value, nodes, edges, show_literals)
+                _process_single_value(iri, key, value, nodes, edges, show_literals, existing_nodes)
 
     return nodes, edges
 
@@ -314,7 +327,9 @@ async def get_response(
         )
 
     # Build graph and compute incremental diff
-    new_nodes, new_edges = build_graph_from_entities(entities)
+    new_nodes, new_edges = build_graph_from_entities(
+        entities, existing_nodes=graph_state.current_nodes
+    )
     diff = graph_state.update(new_nodes, new_edges)
 
     if diff["actions"]:
@@ -410,4 +425,6 @@ app.main_set(objects=[main_layout])
 servable = app.servable()
 
 if __name__ == "__main__":
+    import dummy_backend
+    dummy_backend.register()
     pn.serve(servable, port=5011)
