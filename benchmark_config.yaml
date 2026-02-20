@@ -24,7 +24,7 @@ benchmark:
     - gpt-5.2-chat
     - gpt-5-nano
     - gpt-5-mini
-    - gpt-oss-120b
+    #- gpt-oss-120b # deployment not operational
     #- phi-4-mini-instruct # error: json-schema grammar not supported
     #- phi-4-reasoning # error: json-schema grammar not supported
     - mistral-large-3
@@ -34,7 +34,13 @@ benchmark:
     #- qwen-3-coder-next-q6_k-gguf # not deployed
     #- ministral-3-14b-instruct-2512 # not deployed
     #- gpt-oss-120b-vllm # not deployed
-    - mistral-small-3.2-24b-instruct-2506
+    #- mistral-small-3.2-24b-instruct-2506-vllm # not deployed
+    #- devstral-small-2-24b-instruct-2512-vllm # not deployed
+    - mistral-small-3.2-24b-instruct-2506-mistralai
+    - devstral-small-2-24b-instruct-2512-mistralai
+    - devstral-2-123b-instruct-2512-mistralai'
+    #- magistral-small-2509-mistralai # error: timeout
+    - magistral-small-2509-vllm
     #- ministral-3:14b # local
     #- mistral:7b # local
 
@@ -192,6 +198,7 @@ model_list:
     price_per_million_token_in: 0.05
     price_per_million_token_out: 0.4
 
+  # still issues with missing $ref
   - model_name: gpt-5-mini
     litellm_params:
       model: gpt-5-mini
@@ -301,12 +308,74 @@ model_list:
       temperature: 0.0
     provider: vllm
 
-  - model_name: mistral-small-3.2-24b-instruct-2506
+  - model_name: mistral-small-3.2-24b-instruct-2506-vllm
     litellm_params:
       model: mistralai/Mistral-Small-3.2-24B-Instruct-2506
       api_base: os.environ/VLLM_ENDPOINT
       temperature: 0.0
     provider: vllm
+    # source https://mistral.ai/pricing#api
+    price_per_million_token_in: 0.1
+    price_per_million_token_out: 0.3
+
+  - model_name: devstral-small-2-24b-instruct-2512-vllm
+    litellm_params:
+      model: mistralai/Devstral-Small-2-24B-Instruct-2512
+      api_base: os.environ/VLLM_ENDPOINT
+      temperature: 0.0
+    provider: vllm
+    price_per_million_token_in: 0.1
+    price_per_million_token_out: 0.3
+
+  - model_name: mistral-small-3.2-24b-instruct-2506-mistralai
+    litellm_params:
+      model: mistral-small-2506
+      api_base: os.environ/MISTRALAI_API_ENDPOINT
+      api_key: os.environ/MISTRALAI_API_KEY
+      temperature: 0.0
+    provider: openai-compatible-api
+    price_per_million_token_in: 0.1
+    price_per_million_token_out: 0.3
+
+  - model_name: devstral-small-2-24b-instruct-2512-mistralai
+    litellm_params:
+      model: devstral-small-latest
+      api_base: os.environ/MISTRALAI_API_ENDPOINT
+      api_key: os.environ/MISTRALAI_API_KEY
+      temperature: 0.0
+    provider: openai-compatible-api
+    price_per_million_token_in: 0.1
+    price_per_million_token_out: 0.3
+
+  - model_name: devstral-2-123b-instruct-2512-mistralai
+    litellm_params:
+      model: devstral-2512
+      api_base: os.environ/MISTRALAI_API_ENDPOINT
+      api_key: os.environ/MISTRALAI_API_KEY
+      temperature: 0.0
+    provider: openai-compatible-api
+    price_per_million_token_in: 0.4
+    price_per_million_token_out: 2.0
+
+  # magistral-small-latest
+  - model_name: magistral-small-2509-mistralai
+    litellm_params:
+      model: magistral-small-latest
+      api_base: os.environ/MISTRALAI_API_ENDPOINT
+      api_key: os.environ/MISTRALAI_API_KEY
+      temperature: 0.7
+    provider: mistralai
+    price_per_million_token_in: 0.5
+    price_per_million_token_out: 1.5
+
+  - model_name: magistral-small-2509-vllm
+    litellm_params:
+      model: mistralai/Magistral-Small-2509
+      api_base: os.environ/VLLM_ENDPOINT
+      #temperature: 0.0
+    provider: vllm
+    price_per_million_token_in: 0.5
+    price_per_million_token_out: 1.5
 
   # local ollama models
   - model_name: mistral:7b

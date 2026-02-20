@@ -125,6 +125,14 @@ def get_llm():
             api_key=environ.get("API_KEY"),
             model=environ.get("API_MODEL")
         )
+        
+    if environ.get("API_PROVIDER") == "mistralai":
+        from langchain_mistralai.chat_models import ChatMistralAI
+        llm = ChatMistralAI(
+            model=environ.get("API_MODEL"),
+            api_key=environ.get("API_KEY"),
+            base_url=environ.get("API_ENDPOINT")
+        )
 
     # Apply temperature if set via environment
     temp_str = environ.get("API_TEMPERATURE")
