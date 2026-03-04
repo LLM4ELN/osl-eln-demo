@@ -22,4 +22,4 @@ dependencies = [
 
 [tool.uv.sources]
 osw = { git = "https://github.com/OpenSemanticLab/osw-python" }
-panelini = { git = "https://github.com/opensemanticworld/panelini", branch = "feat-visnetwork-incremental-updates" }
+panelini = { git = "https://github.com/opensemanticworld/panelini", branch = "feat-visnetwork-jsondata-tooltip" }

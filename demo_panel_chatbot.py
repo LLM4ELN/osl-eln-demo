@@ -118,6 +118,7 @@ class GraphState:
                 if (
                     node.get("label") != old.get("label")
                     or node.get("type") != old.get("type")
+                    or node.get("json_data") != old.get("json_data")
                 ):
                     actions.append({"action": "updateNode", **node})
                 updated_node_ids.append(nid)
@@ -257,7 +258,12 @@ def build_graph_from_entities(
         display_name = _extract_name(data, iri)
 
         # -- entity instance node -------------------------------------------
-        nodes[iri] = {"id": iri, "label": display_name, "type": "instance"}
+        nodes[iri] = {
+            "id": iri,
+            "label": display_name,
+            "type": "instance",
+            "json_data": data,
+        }
 
         # -- "type" -> class node + edge ------------------------------------
         type_list = data.get("type", [])
