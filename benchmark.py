@@ -33,11 +33,19 @@ _LITELLM_ENV_MAPPING = {
 }
 
 
+# Snapshot of env vars at import time, before _apply_model_config mutates them.
+_INITIAL_ENV = dict(os.environ)
+
+
 def _resolve_env_ref(value: str) -> str:
-    """Resolve 'os.environ/VAR_NAME' references to actual env var values."""
+    """Resolve 'os.environ/VAR_NAME' references to actual env var values.
+
+    Uses a snapshot taken at import time so that sequential model configs
+    don't pollute each other's env-var references.
+    """
     if isinstance(value, str) and value.startswith("os.environ/"):
         var_name = value[len("os.environ/"):]
-        return os.environ.get(var_name, "")
+        return _INITIAL_ENV.get(var_name, "")
     return value
 
 
@@ -66,6 +74,8 @@ def _apply_model_config(model_config: Dict[str, Any]):
     for param_key, env_var in _LITELLM_ENV_MAPPING.items():
         if param_key in params:
             os.environ[env_var] = _resolve_env_ref(str(params[param_key]))
+        else:
+            os.environ.pop(env_var, None)
     # provider lives outside litellm_params
     if "provider" in model_config:
         os.environ["API_PROVIDER"] = model_config["provider"]

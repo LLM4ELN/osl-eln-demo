@@ -24,6 +24,7 @@ from opensemantic.v1 import OswBaseModel
 import opensemantic.core.v1  # noqa: F401 needed for eval
 import opensemantic.base.v1  # noqa: F401 needed for eval
 import opensemantic.lab.v1   # noqa: F401 needed for eval
+import process_models         # noqa: F401 needed for eval
 
 from llm_init import get_llm, model_supports_structured_output
 from oold_agent import _schema_build_cache
@@ -239,8 +240,10 @@ class MultiStepAgent(BaseModel):
                 print(
                     f"  Warning: Unknown schema "
                     f"'{entity.schema_path}', no match in inventory"
+                    f" — skipping"
                 )
-        return entities
+                entity.schema_path = None  # mark for removal
+        return [e for e in entities if e.schema_path is not None]
 
     # ------------------------------------------------------------------
     # Schema helpers (shared with oold_agent2)
@@ -325,6 +328,16 @@ class MultiStepAgent(BaseModel):
         schema = modify_schema(schema)
         if _limit_str_fields():
             schema = add_max_length_constraints(schema)
+
+        # Constrain schema_path to valid inventory paths via enum
+        entity_props = (
+            schema.get("properties", {})
+            .get("entities", {})
+            .get("items", {})
+            .get("properties", {})
+        )
+        if "schema_path" in entity_props:
+            entity_props["schema_path"]["enum"] = valid_paths
 
         # Serialize schema into prompt so grammar-driven engines
         # (vLLM, llama.cpp) see description/maxLength annotations
@@ -944,6 +957,8 @@ class MultiStepAgent(BaseModel):
             "Do not generate dummy or placeholder values. "
             "If you do not have enough information for a field, "
             "leave it empty or null."
+            "If you fail twice to produce a valid value for a property, "
+            "leave it empty or null."
         )
 
         schema_str = json.dumps(filtered_schema, indent=2)
@@ -1292,6 +1307,12 @@ if __name__ == "__main__":
         "employed at Example Lab Corp.\n"
         "A tensile test experiment #3 conducted by Dr. John Doe "
         "(john.doe@example-lab.com)"
+    )
+    
+    _test_prompt = (
+    """
+The availability of stretchable conductive materials is a key requirement for the development of soft and wearable electronics. Although there are many promising materials, the characterization of these materials under realistic conditions is complex and a standardized and reliable procedure has not been etablished yet. We therefore introduce a comprehensive protocol for the practice-oriented dynamic electro-mechanical analysis of elastomer-particle composites. In addition to strain dependence (0–100% strain) and fatigue strength (10,000 cycles), this protocol aims in particular to clarify the influence of strain rate (0–100% s−1) on conductivity. Samples with the commonly used filler representatives carbon black and silver flakes with 20 vol% each were prepared and investigated. Silicone elastomers of different stiffness were used as matrix in order to determine its influence. We found that while the conductivity of the carbon black composites of about 1 × 102 S m−1 proved to be fatigue resistant and largely independent of the strain rate, the silver flake composites lost their initially higher conductivity of 1 × 104 S m−1 at high strain rates and increasing numbers of cycles. In addition, the use of a softer silicone matrix improved the performance of both particle composites, which was also demonstrated on an exemplary wearable electronic device.
+    """
     )
 
     invoke_test(test_prompt)

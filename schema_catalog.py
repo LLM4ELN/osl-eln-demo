@@ -97,15 +97,21 @@ def _get_schema_metadata(cls: type) -> tuple[str, str]:
     schema_uuid = ""
     schema_id = ""
 
-    # Get uuid from Config.schema_extra
+    # Get uuid from Config.schema_extra (v1) or model_config (v2)
     if hasattr(cls, 'Config') and hasattr(cls.Config, 'schema_extra'):
         schema_uuid = cls.Config.schema_extra.get('uuid', '')
+    elif hasattr(cls, 'model_config'):
+        extra = cls.model_config.get('json_schema_extra', {})
+        if extra:
+            schema_uuid = extra.get('uuid', '')
 
-    # Get schema_id from type field default
-    fields = getattr(cls, '__fields__', {})
+    # Get schema_id from type field default (v1: __fields__, v2: model_fields)
+    fields = getattr(cls, '__fields__', None) or {}
+    if not fields and hasattr(cls, 'model_fields'):
+        fields = cls.model_fields
     if 'type' in fields:
         type_field = fields['type']
-        default = type_field.default
+        default = getattr(type_field, 'default', None)
         if isinstance(default, list) and len(default) > 0:
             schema_id = default[0]
         elif isinstance(default, str):
@@ -114,15 +120,29 @@ def _get_schema_metadata(cls: type) -> tuple[str, str]:
     return schema_uuid, schema_id
 
 
+def _is_schema_class(cls: type) -> bool:
+    """Check if cls is an opensemantic Entity (v1 or v2)."""
+    if not inspect.isclass(cls):
+        return False
+    v1_entity = opensemantic.core.v1._model.Entity
+    if issubclass(cls, v1_entity):
+        return True
+    try:
+        import opensemantic.core._model as _v2_core
+        if hasattr(_v2_core, "Entity") and issubclass(cls, _v2_core.Entity):
+            return True
+    except ImportError:
+        pass
+    return False
+
+
 def get_data_schema_markdown(
     cls: type,
     include_properties: bool = True,
     include_property_def: bool = True
 ) -> str:
     """Returns a markdown representation of a single data model class."""
-    root_class = opensemantic.core.v1._model.Entity
-
-    if not (inspect.isclass(cls) and issubclass(cls, root_class)):
+    if not _is_schema_class(cls):
         return ""
 
     module_name = cls.__module__.replace('._model', '')
@@ -161,19 +181,30 @@ def get_data_schema_markdown(
 
 def build_inventory(
     include_properties: bool = True,
-    include_property_def: bool = True
+    include_property_def: bool = True,
+    extra_modules: list = None,
 ) -> SchemaClassInventory:
-    """Build an inventory of all schema classes."""
-    root_class = opensemantic.core.v1._model.Entity
+    """Build an inventory of all schema classes.
+
+    Parameters
+    ----------
+    extra_modules
+        Additional Python modules whose classes should be included in the
+        inventory (e.g. ``[process_models]``).
+    """
     items: Dict[str, SchemaClass] = {}
 
-    for module in [
+    modules = [
         opensemantic.core.v1._model,
         opensemantic.base.v1._model,
-        opensemantic.lab.v1._model
-    ]:
+        opensemantic.lab.v1._model,
+    ]
+    if extra_modules:
+        modules.extend(extra_modules)
+
+    for module in modules:
         for name, obj in inspect.getmembers(module):
-            if inspect.isclass(obj) and issubclass(obj, root_class):
+            if _is_schema_class(obj):
                 module_name = module.__name__.replace('._model', '')
                 full_path = f"{module_name}.{name}"
                 markdown = get_data_schema_markdown(

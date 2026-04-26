@@ -38,9 +38,9 @@ benchmark:
     #- devstral-small-2-24b-instruct-2512-vllm # not deployed
     - mistral-small-3.2-24b-instruct-2506-mistralai
     - devstral-small-2-24b-instruct-2512-mistralai
-    - devstral-2-123b-instruct-2512-mistralai'
+    - devstral-2-123b-instruct-2512-mistralai
     #- magistral-small-2509-mistralai # error: timeout
-    - magistral-small-2509-vllm
+    #- magistral-small-2509-vllm
     #- ministral-3:14b # local
     #- mistral:7b # local
 
@@ -93,6 +93,7 @@ model_list:
       model: deepseek-v3.2-speciale
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
       temperature: 0.0
     provider: azure-foundry
     db_model_id: deepseek-v3.2-speciale
@@ -106,6 +107,7 @@ model_list:
       model: deepseek-v3.2
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
       temperature: 0.0
     provider: azure-foundry
     db_model_id: deepseek-v3.2
@@ -119,6 +121,7 @@ model_list:
       model: cohere-command-a
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
       temperature: 0.0
     provider: azure-foundry
     db_model_id: cohere-command-a
@@ -132,6 +135,7 @@ model_list:
       model: deepseek-r1-0528
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
       temperature: 0.0
     provider: azure-foundry
     db_model_id: deepseek-r1-0528
@@ -144,6 +148,7 @@ model_list:
       model: llama-4-maverick-17b-128e-instruct-fp8
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
       temperature: 0.0
     provider: azure-foundry
     db_model_id: llama-4-maverick-17b-128e-instruct-fp8
@@ -157,6 +162,7 @@ model_list:
       model: kimi-k2.5
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
       temperature: 0.0
     provider: azure-foundry
     db_model_id: kimi-k2.5
@@ -169,6 +175,7 @@ model_list:
       model: kimi-k2-thinking
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
     provider: azure-foundry
     db_model_id: kimi-k2-thinking
     provider_id: azure
@@ -181,6 +188,7 @@ model_list:
       model: gpt-5.2-chat
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
     provider: azure-foundry
     db_model_id: gpt-5.2-chat
     provider_id: azure
@@ -192,18 +200,19 @@ model_list:
       model: gpt-5-nano
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
     provider: azure-foundry
     db_model_id: gpt-5-nano
     provider_id: azure
     price_per_million_token_in: 0.05
     price_per_million_token_out: 0.4
 
-  # still issues with missing $ref
   - model_name: gpt-5-mini
     litellm_params:
       model: gpt-5-mini
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
     provider: azure-foundry
     db_model_id: gpt-5-mini
     provider_id: azure
@@ -215,6 +224,7 @@ model_list:
       model: gpt-oss-120b
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
       temperature: 0.0
     provider: azure-foundry
     comment: "error:  tool_choice 'required' is not supported for the model."
@@ -224,6 +234,7 @@ model_list:
       model: phi-4-reasoning
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
       temperature: 0.0
     provider: azure-foundry
     db_model_id: phi-4-reasoning
@@ -236,6 +247,7 @@ model_list:
       model: phi-4-mini-instruct
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
       temperature: 0.0
     provider: azure-foundry
     db_model_id: phi-4-mini
@@ -248,8 +260,9 @@ model_list:
       model: mistral-large-3
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
       temperature: 0.0
-    provider: azure-foundry-mistral
+    provider: azure-foundry
     db_model_id: mistral-large-2411
     provider_id: azure
     price_per_million_token_in: 2
@@ -260,8 +273,9 @@ model_list:
       model: mistral-medium-2505
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
+
       temperature: 0.0
-    provider: azure-foundry-mistral
+    provider: azure-foundry
     db_model_id: mistral-medium-2505
     provider_id: azure
     price_per_million_token_in: 0.4
@@ -272,9 +286,9 @@ model_list:
       model: mistral-small-2503
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
-      api_version: "2024-06-01"
+
       temperature: 0.0
-    provider: azure-foundry-mistral
+    provider: azure-foundry
     db_model_id: mistral-small-2503
     provider_id: azure
     price_per_million_token_in: 0.1

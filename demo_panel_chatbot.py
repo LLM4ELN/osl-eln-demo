@@ -17,7 +17,20 @@ from panelini.panels.visnetwork import VisNetwork
 
 from dummy_backend import DummyBackend
 from oold_agent3 import MultiStepAgent
-from schema_catalog import get_cached_inventory
+import schema_catalog
+from schema_catalog import build_inventory, get_cached_inventory
+import process_models  # noqa: F401 — needed for agent eval resolution
+
+# Register custom process models in schema inventory and hide
+# conflicting original mixing classes.
+_inv = build_inventory(
+    include_properties=False,
+    include_property_def=False,
+    extra_modules=[process_models],
+)
+for _path in process_models.HIDDEN_SCHEMA_PATHS:
+    _inv.items.pop(_path, None)
+schema_catalog._cached_inventory = _inv
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -394,6 +407,12 @@ graph_state = GraphState()
 
 vis = VisNetwork(nodes=[], edges=[], options=VIS_OPTIONS)
 
+EXAMPLE_PROMPT = (
+    "2g of Material A and 1g of Material B were mixed "
+    "for 30 s @ 1000 rpm. The mixture was cured for "
+    "10 h at 120\u00b0C."
+)
+
 chat_interface = pn.chat.ChatInterface(
     callback=get_response,
     user="User",
@@ -405,6 +424,7 @@ chat_interface = pn.chat.ChatInterface(
     show_button_name=False,
     show_reaction_icons=False,
     callback_exception="verbose",
+    placeholder_text=EXAMPLE_PROMPT,
 )
 
 main_layout = pn.Row(

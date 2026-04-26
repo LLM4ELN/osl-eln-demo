@@ -112,14 +112,28 @@ def merge_all_of(schema):
     return schema
 
 
-def modify_schema(schema, seen_refs=None, root=None):
+def modify_schema(schema, seen_refs=None, root=None, _depth=0, max_depth=None):
     """makes jsonschema OpenAI conform,
     see https://platform.openai.com/docs/guides/structured-outputs#supported-schemas
     Interate over a JsonSchema recursively.
     add the key additionalProperties: false to every type object schema.
     for each object properties which is not required add the union type with null,
     e.g. type: [string, null]. finally, make all properties required.
+
+    Parameters
+    ----------
+    max_depth
+        If set, nested objects deeper than this level are collapsed to
+        ``{"type": "string"}``.  Depth 0 is the root schema.  This prevents
+        grammar explosion when schemas inherit large Entity hierarchies.
     """  # noqa: E501
+
+    # Collapse deeply nested objects to simple strings
+    if max_depth is not None and _depth > max_depth:
+        if isinstance(schema, dict) and schema.get("type") in (
+            "object", ["object", "null"]
+        ):
+            return {"type": "string"}
 
     model_type = os.environ.get("API_MODEL", "").lower()
     is_openai_model = ("openai" in model_type or "gpt" in model_type)
@@ -206,7 +220,8 @@ def modify_schema(schema, seen_refs=None, root=None):
                     # output APIs
                 # Recursively modify nested objects
                 schema["properties"][prop] = modify_schema(
-                    prop_schema, root=root, seen_refs=seen_refs
+                    prop_schema, root=root, seen_refs=seen_refs,
+                    _depth=_depth + 1, max_depth=max_depth,
                 )
             # Make all properties required - LLM will provide empty defaults
             # for fields without data ([], "", {})
@@ -215,11 +230,15 @@ def modify_schema(schema, seen_refs=None, root=None):
             items = schema.get("items")
             if items:
                 schema["items"] = modify_schema(
-                    items, root=root, seen_refs=seen_refs
+                    items, root=root, seen_refs=seen_refs,
+                    _depth=_depth + 1, max_depth=max_depth,
                 )
     elif isinstance(schema, list):
         for i, item in enumerate(schema):
-            schema[i] = modify_schema(item, root=root, seen_refs=seen_refs)
+            schema[i] = modify_schema(
+                item, root=root, seen_refs=seen_refs,
+                _depth=_depth, max_depth=max_depth,
+            )
 
     # #handle $defs
     # if isinstance(schema, dict) and "$defs" in schema:
@@ -242,7 +261,8 @@ def modify_schema(schema, seen_refs=None, root=None):
                 else:
                     seen_refs[ref] = True
                     schema.update(modify_schema(
-                        root["$defs"][def_key], root=root, seen_refs=seen_refs
+                        root["$defs"][def_key], root=root, seen_refs=seen_refs,
+                        _depth=_depth, max_depth=max_depth,
                     ))
                     schema.pop("$ref", None)
             else:
@@ -252,12 +272,16 @@ def modify_schema(schema, seen_refs=None, root=None):
                     schema["$ref"] = "#"
                 else:
                     print(f"Warning: $ref {ref} not found in root $defs")
+                    # dump complete schema for debugging
+                    import json  # noqa: E402
+                    print("Complete schema:", json.dumps(root, indent=2))
 
     if isinstance(schema, dict):
         if "anyOf" in schema:
             for i, subschema in enumerate(schema["anyOf"]):
                 schema["anyOf"][i] = modify_schema(
-                    subschema, root=root, seen_refs=seen_refs
+                    subschema, root=root, seen_refs=seen_refs,
+                    _depth=_depth, max_depth=max_depth,
                 )
         if "format" in schema:
             if schema["format"] in [
