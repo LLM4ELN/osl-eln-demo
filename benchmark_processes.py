@@ -5,34 +5,30 @@ Tests LLM extraction of:
 - HeatingProcess with duration + temperature
 - Material inputs/outputs with mass
 - Process chain linkage (output of mixing = input of curing)
+
+Reuses the benchmark infrastructure from benchmark.py by patching
+CHAPTERS and validate_chapter with process-chain specific versions.
 """
 
 import json
-import time
-import traceback
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
 import process_models  # noqa: F401
 import dummy_backend
+import benchmark
 import schema_catalog
 from schema_catalog import build_inventory
 from benchmark import (
-    BenchmarkResult,
     ChapterExpectation,
     ChapterResult,
     EntityExpectation,
-    ModelBenchmarkResult,
     ValidationError,
-    _apply_model_config,
-    _collect_future_result,
-    create_benchmark_agent,
     export_results,
     get_entity_class_path,
     is_class_match,
-    load_benchmark_config,
     normalize_string,
     print_comparison,
+    run_model_comparison,
 )
 
 dummy_backend.register()
@@ -195,7 +191,7 @@ def find_matching_entity_nested(
 
 
 # ---------------------------------------------------------------------------
-# Validation
+# Custom validate_chapter with nested quantity matching
 # ---------------------------------------------------------------------------
 
 
@@ -278,222 +274,11 @@ def validate_chapter(
 
 
 # ---------------------------------------------------------------------------
-# Benchmark runner
+# Monkey-patch benchmark.py to use our CHAPTERS and validator
 # ---------------------------------------------------------------------------
 
-
-def run_benchmark(
-    verbose: bool = True,
-    agent_type: str = "iterative",
-) -> BenchmarkResult:
-    """Run the process-chain benchmark."""
-    result = BenchmarkResult()
-    agent = create_benchmark_agent(agent_type)
-
-    all_entity_ids: set = set()
-    total_start = time.time()
-
-    for chapter in CHAPTERS:
-        if verbose:
-            print(f"\n{'='*60}")
-            print(f"Processing {chapter.name}")
-            print(f"Prompt: {chapter.prompt}")
-            print(f"Expected new: {len(chapter.expected_new)}")
-            print("=" * 60)
-
-        chapter_start = time.time()
-
-        try:
-            agent.invoke(prompt=chapter.prompt)
-            chapter_elapsed = time.time() - chapter_start
-
-            if not agent.entities:
-                chapter_result = ChapterResult(chapter_name=chapter.name)
-                chapter_result.errors.append(ValidationError(
-                    chapter=chapter.name,
-                    error_type="INVOKE_FAILED",
-                    message="Failed to create entity",
-                ))
-                chapter_result.elapsed_time = chapter_elapsed
-                result.chapters.append(chapter_result)
-                continue
-
-            chapter_result = validate_chapter(
-                chapter, agent, all_entity_ids
-            )
-            chapter_result.elapsed_time = chapter_elapsed
-
-            if verbose:
-                print(f"\nCreated: {len(chapter_result.entities_created)}")
-                for e in chapter_result.entities_created:
-                    print(f"  - {e['class']}: {e['fields']}")
-                if chapter_result.errors:
-                    print(f"\nErrors: {len(chapter_result.errors)}")
-                    for err in chapter_result.errors:
-                        print(f"  [{err.error_type}] {err.message}")
-
-            agent.store_entities()
-            all_entity_ids.update(agent.entities.keys())
-            result.chapters.append(chapter_result)
-            agent.clear()
-
-        except Exception:
-            chapter_elapsed = time.time() - chapter_start
-            tb = traceback.format_exc()
-            print(f"\n  EXCEPTION in {chapter.name}:\n{tb}")
-            chapter_result = ChapterResult(chapter_name=chapter.name)
-            chapter_result.elapsed_time = chapter_elapsed
-            chapter_result.errors.append(ValidationError(
-                chapter=chapter.name,
-                error_type="EXCEPTION",
-                message=tb.splitlines()[-1],
-                details={"traceback": tb},
-            ))
-            result.chapters.append(chapter_result)
-            break
-
-    for ch in result.chapters:
-        result.total_errors += len(ch.errors)
-    result.passed = result.total_errors == 0
-    result.total_time = time.time() - total_start
-
-    if hasattr(agent, "token_usage"):
-        result.input_tokens = agent.token_usage.get("input_tokens", 0)
-        result.output_tokens = agent.token_usage.get("output_tokens", 0)
-        result.total_tokens = agent.token_usage.get("total_tokens", 0)
-
-    if result.total_tokens > 0 and result.total_time > 0:
-        result.tokens_per_second = result.total_tokens / result.total_time
-
-    if verbose:
-        print(f"\nTotal benchmark time: {result.total_time:.2f}s")
-        print(
-            f"Tokens: {result.input_tokens} in / "
-            f"{result.output_tokens} out / "
-            f"{result.total_tokens} total"
-        )
-
-    return result
-
-
-def print_summary(result: BenchmarkResult):
-    """Print a summary of the benchmark results."""
-    print("\n" + "=" * 60)
-    print("PROCESS CHAIN BENCHMARK SUMMARY")
-    print("=" * 60)
-
-    print(f"\nChapters processed: {len(result.chapters)}")
-
-    total_created = sum(len(c.entities_created) for c in result.chapters)
-    print(f"Total entities created: {total_created}")
-
-    print("\nPer-chapter breakdown:")
-    for chapter in result.chapters:
-        status = "PASS" if not chapter.errors else "FAIL"
-        print(
-            f"\n  [{status}] {chapter.chapter_name} "
-            f"({chapter.elapsed_time:.2f}s)"
-        )
-        print(
-            f"    New: {len(chapter.entities_created)}, "
-            f"Errors: {len(chapter.errors)}"
-        )
-        if chapter.errors:
-            for err in chapter.errors:
-                print(f"      [{err.error_type}] {err.message}")
-
-    print("\n" + "=" * 60)
-    if result.passed:
-        print("RESULT: PASSED")
-    else:
-        print(f"RESULT: FAILED ({result.total_errors} errors)")
-    print("=" * 60)
-
-
-def _run_benchmarks_for_model(
-    model_config: Dict[str, Any],
-    n_runs: int,
-    verbose: bool,
-    run_timeout: float = 600,
-    agent_type: str = "iterative",
-) -> ModelBenchmarkResult:
-    """Run benchmark repetitions for a single model."""
-    _apply_model_config(model_config)
-    model = model_config["model_name"]
-
-    safe_config = {
-        k: v for k, v in model_config.items() if k != "litellm_params"
-    }
-    params = model_config.get("litellm_params", {})
-    safe_config["litellm_params"] = {
-        k: v for k, v in params.items() if k not in ("api_key",)
-    }
-
-    model_result = ModelBenchmarkResult(
-        model=model, agent_type=agent_type, model_config=safe_config
-    )
-
-    for run_idx in range(n_runs):
-        print(f"\n--- Run {run_idx + 1}/{n_runs} for {model} ---")
-        executor = ThreadPoolExecutor(max_workers=1)
-        future = executor.submit(
-            run_benchmark, verbose=verbose, agent_type=agent_type
-        )
-        result = _collect_future_result(future, run_idx, run_timeout)
-        executor.shutdown(wait=False, cancel_futures=True)
-        model_result.runs.append(result)
-        status = "PASS" if result.passed else "FAIL"
-        print(
-            f"--- Run {run_idx + 1} finished: {status}, "
-            f"{result.total_errors} errors, "
-            f"{result.total_time:.2f}s ---"
-        )
-
-    price_in = model_config.get("price_per_million_token_in")
-    price_out = model_config.get("price_per_million_token_out")
-    if price_in is not None and price_out is not None:
-        for run in model_result.runs:
-            run.cost = (
-                run.input_tokens * price_in / 1_000_000
-                + run.output_tokens * price_out / 1_000_000
-            )
-
-    return model_result
-
-
-def run_model_comparison(config=None, verbose=False):
-    """Run the process benchmark for each model defined in the config."""
-    if config is None:
-        config = load_benchmark_config()
-
-    model_configs = config["models"]
-    agent_types = config.get("agent_type", ["iterative"])
-    n_runs = config.get("runs", 3)
-    run_timeout = config.get("timeout", 600)
-
-    combinations = [
-        (mc, at) for mc in model_configs for at in agent_types
-    ]
-
-    all_results = []
-    for mc, at in combinations:
-        model = mc["model_name"]
-        print(f"\n{'#'*60}")
-        print(f"# MODEL: {model}  AGENT: {at}")
-        print(f"{'#'*60}")
-        try:
-            model_result = _run_benchmarks_for_model(
-                mc, n_runs, verbose, run_timeout, agent_type=at,
-            )
-        except Exception:
-            tb = traceback.format_exc()
-            print(f"\n### {model}/{at} CRASHED:\n{tb}")
-            model_result = ModelBenchmarkResult(
-                model=model, agent_type=at
-            )
-        all_results.append(model_result)
-
-    return all_results
+benchmark.CHAPTERS = CHAPTERS
+benchmark.validate_chapter = validate_chapter
 
 
 if __name__ == "__main__":

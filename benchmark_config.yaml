@@ -260,9 +260,8 @@ model_list:
       model: mistral-large-3
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
-
       temperature: 0.0
-    provider: azure-foundry
+    provider: azure-foundry-mistral
     db_model_id: mistral-large-2411
     provider_id: azure
     price_per_million_token_in: 2
@@ -273,9 +272,8 @@ model_list:
       model: mistral-medium-2505
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
-
       temperature: 0.0
-    provider: azure-foundry
+    provider: azure-foundry-mistral
     db_model_id: mistral-medium-2505
     provider_id: azure
     price_per_million_token_in: 0.4
@@ -286,9 +284,8 @@ model_list:
       model: mistral-small-2503
       api_base: os.environ/API_ENDPOINT
       api_key: os.environ/API_KEY
-
       temperature: 0.0
-    provider: azure-foundry
+    provider: azure-foundry-mistral
     db_model_id: mistral-small-2503
     provider_id: azure
     price_per_million_token_in: 0.1

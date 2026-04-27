@@ -164,11 +164,20 @@ def get_llm():
     return llm
 
 
+# Models that reject tool_choice="required" (e.g. Azure-hosted Mistral).
+# For these, we bind tool_choice="any" which is functionally equivalent.
+_TOOL_CHOICE_ANY_MODELS = {
+    "mistral-large-3",
+    "mistral-medium-2505",
+    "mistral-small-2503",
+}
+
+
 def model_supports_structured_output(llm: BaseChatModel, tools=None):
     """Check if the LLM model supports structured output"""
     if (
         hasattr(llm, "model_name")
-        and llm.model_name in ["mistral-large-3"]
+        and llm.model_name in _TOOL_CHOICE_ANY_MODELS
     ):
         return False
     if (
@@ -177,6 +186,17 @@ def model_supports_structured_output(llm: BaseChatModel, tools=None):
     ):
         return True
     return _supports_provider_strategy(llm, tools)
+
+
+def bind_tool_choice_if_needed(llm: BaseChatModel) -> BaseChatModel:
+    """Bind tool_choice='any' for models that reject 'required'.
+
+    Returns the original LLM unchanged if no binding is needed.
+    """
+    model_name = getattr(llm, "model_name", "")
+    if model_name in _TOOL_CHOICE_ANY_MODELS:
+        return llm.bind(tool_choice="any")
+    return llm
 
 
 def get_response_format(

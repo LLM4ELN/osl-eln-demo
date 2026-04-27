@@ -31,17 +31,24 @@ class ProcessInput(OswBaseModel):
     material: Material = Field(
         None,
         title="Material",
-        description="Name or reference of the material.",
+        description="Reference to the material entity.",
         range="Category:OSW31ca9a739cb24079b36824045c0832aa",
     )
     mass: Mass = Field(
         None,
         title="Mass",
+        description="Mass of this material in the process.",
     )
 
 
 class MixingProcess(_BaseMixingProcess):
-    """Mixing process with duration, rotational speed, and typed inputs/outputs."""
+    """A mixing process with duration, rotational speed, and quantitative
+    material specifications.
+
+    Use 'input' / 'output' (inherited) to link to other entities.
+    Use 'input_materials' / 'output_materials' to provide quantitative
+    specifications of the substances involved.
+    """
 
     class Config:
         schema_extra = {
@@ -49,8 +56,10 @@ class MixingProcess(_BaseMixingProcess):
             "title": "MixingProcess",
             "title*": {"en": "Mixing process", "de": "Mischprozess"},
             "description": (
-                "A mixing process with duration, rotational speed, "
-                "and typed material inputs/outputs."
+                "A mixing process. "
+                "'input'/'output' provide general links to entities. "
+                "'input_materials'/'output_materials' provide quantitative "
+                "specifications of the substances involved."
             ),
         }
 
@@ -58,10 +67,20 @@ class MixingProcess(_BaseMixingProcess):
     duration: Time = Field(None, title="Duration")
     mixing_speed: RotationalFrequency = Field(None, title="Mixing speed")
     input_materials: list[ProcessInput] = Field(
-        None, title="Input materials"
+        None,
+        title="Input materials",
+        description=(
+            "Quantitative input specifications: list of materials with "
+            "their mass."
+        ),
     )
     output_materials: list[ProcessInput] = Field(
-        None, title="Output materials"
+        None,
+        title="Output materials",
+        description=(
+            "Quantitative output specifications: list of materials with "
+            "their mass."
+        ),
     )
 
 
@@ -69,7 +88,13 @@ ExtendedMixingProcess = MixingProcess
 
 
 class HeatingProcess(Process):
-    """Heating or curing process with temperature and duration."""
+    """A heating or curing process with temperature, duration, and quantitative
+    material specifications.
+
+    Use 'input' / 'output' (inherited) to link to other entities.
+    Use 'input_materials' / 'output_materials' to provide quantitative
+    specifications of the substances involved.
+    """
 
     class Config:
         schema_extra = {
@@ -77,8 +102,10 @@ class HeatingProcess(Process):
             "title": "HeatingProcess",
             "title*": {"en": "Heating process", "de": "Heizprozess"},
             "description": (
-                "A process involving heating or curing at a specified "
-                "temperature for a given duration."
+                "A heating or curing process. "
+                "'input'/'output' provide general links to entities. "
+                "'input_materials'/'output_materials' provide quantitative "
+                "specifications of the substances involved."
             ),
         }
 
@@ -86,10 +113,20 @@ class HeatingProcess(Process):
     duration: Time = Field(None, title="Duration")
     temperature: Temperature = Field(None, title="Temperature")
     input_materials: list[ProcessInput] = Field(
-        None, title="Input materials"
+        None,
+        title="Input materials",
+        description=(
+            "Quantitative input specifications: list of materials with "
+            "their mass."
+        ),
     )
     output_materials: list[ProcessInput] = Field(
-        None, title="Output materials"
+        None,
+        title="Output materials",
+        description=(
+            "Quantitative output specifications: list of materials with "
+            "their mass."
+        ),
     )
 
 
