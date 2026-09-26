@@ -344,11 +344,6 @@ class MultiStepAgent(BaseModel):
         schema_str = json.dumps(schema, indent=2)
         user_prompt += f"\n\n## Output Schema\n\n{schema_str}"
 
-        # Serialize schema into prompt so grammar-driven engines
-        # (vLLM, llama.cpp) see description/maxLength annotations
-        schema_str = json.dumps(schema, indent=2)
-        user_prompt += f"\n\n## Output Schema\n\n{schema_str}"
-
         llm = self._get_llm()
         if model_supports_structured_output(llm, tools=[]):
             response_format = ProviderStrategy(schema=schema, strict=True)
