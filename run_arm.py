@@ -46,11 +46,23 @@ def main() -> None:
     )
     parser.add_argument("--runs", type=int, default=None)
     parser.add_argument("--agent-type", default="multi_step")
+    parser.add_argument(
+        "--env",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Extra enforcement setting, repeatable. Applied after the arm.",
+    )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
     load_dotenv()
     os.environ.update(ARMS[args.arm])
+    for setting in args.env:
+        if "=" not in setting:
+            raise SystemExit(f"--env needs KEY=VALUE, got {setting!r}")
+        key, value = setting.split("=", 1)
+        os.environ[key.strip()] = value.strip()
 
     import benchmark
 

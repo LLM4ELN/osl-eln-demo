@@ -177,6 +177,8 @@ def get_enforcement() -> Dict[str, Any]:
         "decode_constraint": os.environ.get("DECODE_CONSTRAINT", "enum").lower(),
         "catalogue_size": len(get_cached_inventory().get_all_full_paths()),
         "limit_str_fields": os.environ.get("LIMIT_STR_FIELDS", "false"),
+        "inventory_key": os.environ.get("INVENTORY_KEY", "defining").lower(),
+        "schema_name_gate": os.environ.get("SCHEMA_NAME_GATE", "drop").lower(),
     }
 
 

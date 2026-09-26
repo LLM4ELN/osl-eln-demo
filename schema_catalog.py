@@ -8,6 +8,7 @@ import opensemantic.base.v1._model
 import opensemantic.lab.v1._model
 
 import inspect
+import os
 
 _source_code: str | None = None
 
@@ -216,6 +217,10 @@ def build_inventory(
     if extra_modules:
         modules.extend(extra_modules)
 
+    key_on_binding = (
+        os.environ.get("INVENTORY_KEY", "defining").lower() == "binding"
+    )
+
     for module in modules:
         for name, obj in inspect.getmembers(module):
             if _is_schema_class(obj):
@@ -224,10 +229,14 @@ def build_inventory(
                 # on the binding name puts paths in the enum that the
                 # catalogue markdown, get_entity_class_path() and
                 # _get_all_superclasses() all spell differently.
-                module_name = obj.__module__.replace('._model', '')
-                full_path = f"{module_name}.{obj.__name__}"
-                if full_path in items:
-                    continue
+                if key_on_binding:
+                    module_name = module.__name__.replace('._model', '')
+                    full_path = f"{module_name}.{name}"
+                else:
+                    module_name = obj.__module__.replace('._model', '')
+                    full_path = f"{module_name}.{obj.__name__}"
+                    if full_path in items:
+                        continue
                 markdown = get_data_schema_markdown(
                     obj, include_properties, include_property_def
                 )

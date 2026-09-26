@@ -57,6 +57,15 @@ def _catalogue_mode() -> str:
     return os.environ.get("CATALOGUE_MODE", "full").lower()
 
 
+def _schema_name_gate() -> str:
+    """What the commit-time gate does with an unmatchable schema path.
+
+    ``drop`` removes the entity, ``keep`` applies the path corrections but
+    leaves entities whose path matched nothing, which then fail at load.
+    """
+    return os.environ.get("SCHEMA_NAME_GATE", "drop").lower()
+
+
 def _decode_constraint() -> str:
     """Whether schema_path is constrained at decode time.
 
@@ -420,9 +429,9 @@ class MultiStepAgent(BaseModel):
             return []
 
         parsed = SchemaDetectionResult(**result["structured_response"])
-        parsed.entities = self._validate_schema_names(
-            parsed.entities, valid_paths
-        )
+        validated = self._validate_schema_names(parsed.entities, valid_paths)
+        if _schema_name_gate() == "drop":
+            parsed.entities = validated
 
         print(
             f"Detected {len(parsed.entities)} entities "
