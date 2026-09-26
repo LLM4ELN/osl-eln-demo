@@ -48,6 +48,24 @@ def _limit_str_fields() -> bool:
     return os.environ.get("LIMIT_STR_FIELDS", "false") == "true"
 
 
+def _catalogue_mode() -> str:
+    """How much of the class catalogue reaches the step 1 system prompt.
+
+    ``full`` ships the markdown descriptions and the valid path list,
+    ``paths`` only the path list, ``none`` neither.
+    """
+    return os.environ.get("CATALOGUE_MODE", "full").lower()
+
+
+def _decode_constraint() -> str:
+    """Whether schema_path is constrained at decode time.
+
+    ``enum`` pins schema_path to the inventory, ``none`` leaves it a free
+    string and relies on _validate_schema_names as the only gate.
+    """
+    return os.environ.get("DECODE_CONSTRAINT", "enum").lower()
+
+
 def _extract_token_usage(result: dict) -> dict:
     """Extract token usage from agent.invoke() result messages."""
     input_tokens = 0
@@ -123,12 +141,14 @@ unless the description warrants it).
 3. If the same real-world entity is mentioned multiple times, use the SAME id \
 and consolidate all information about it into one description.
 4. Entities should be linked via range properties where the schema defines them.
-5. You MUST use full schema paths from the valid list below.
+5. {path_rule}
 6. Create entities for which you have actual information in the prompt, \
 at least a name / label.
 Do not invent placeholder entities.
 7. Assign each entity a unique id like 'entity_11', 'entity_12', etc.
+{catalogue}"""
 
+_STEP1_CATALOGUE_FULL = """
 ## Available Schemas
 
 {schema_inventory}
@@ -137,6 +157,21 @@ Do not invent placeholder entities.
 
 {valid_paths_list}
 """
+
+_STEP1_CATALOGUE_PATHS = """
+## Valid Schema Paths (use one of these exactly)
+
+{valid_paths_list}
+"""
+
+_STEP1_PATH_RULE = {
+    "full": "You MUST use full schema paths from the valid list below.",
+    "paths": "You MUST use full schema paths from the valid list below.",
+    "none": (
+        "Use a full dotted schema path such as "
+        "'opensemantic.core.v1.Person' for each entity."
+    ),
+}
 
 _STEP1_USER_PROMPT = """\
 Analyze the following description and identify all distinct entities:
@@ -309,18 +344,29 @@ class MultiStepAgent(BaseModel):
         print("Step 1: Schema Detection")
         print("=" * 60)
 
-        schema_inventory = get_data_schema_inventory_markdown(
-            include_properties=False,
-            include_property_def=False,
-        )
-
         inventory = get_cached_inventory()
         valid_paths = inventory.get_all_full_paths()
         valid_paths_str = "\n".join(f"- {p}" for p in valid_paths)
 
+        mode = _catalogue_mode()
+        if mode == "none":
+            catalogue = ""
+        elif mode == "paths":
+            catalogue = _STEP1_CATALOGUE_PATHS.format(
+                valid_paths_list=valid_paths_str,
+            )
+        else:
+            catalogue = _STEP1_CATALOGUE_FULL.format(
+                schema_inventory=get_data_schema_inventory_markdown(
+                    include_properties=False,
+                    include_property_def=False,
+                ),
+                valid_paths_list=valid_paths_str,
+            )
+
         system_prompt = _STEP1_SYSTEM_PROMPT.format(
-            schema_inventory=schema_inventory,
-            valid_paths_list=valid_paths_str,
+            path_rule=_STEP1_PATH_RULE.get(mode, _STEP1_PATH_RULE["full"]),
+            catalogue=catalogue,
         )
         user_prompt = _STEP1_USER_PROMPT.format(prompt=prompt)
 
@@ -336,7 +382,12 @@ class MultiStepAgent(BaseModel):
             .get("items", {})
             .get("properties", {})
         )
-        if "schema_path" in entity_props:
+        if "schema_path" not in entity_props:
+            raise RuntimeError(
+                "schema_path missing from the step 1 output schema; "
+                "the decode-time constraint cannot be applied"
+            )
+        if _decode_constraint() == "enum":
             entity_props["schema_path"]["enum"] = valid_paths
 
         # Serialize schema into prompt so grammar-driven engines
