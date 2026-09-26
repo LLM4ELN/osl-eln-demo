@@ -17,7 +17,6 @@ import process_models  # noqa: F401
 import dummy_backend
 import benchmark
 import schema_catalog
-from schema_catalog import build_inventory
 from benchmark import (
     ChapterExpectation,
     ChapterResult,
@@ -36,14 +35,10 @@ dummy_backend.register()
 # Register custom process models in the schema inventory so the agent
 # can discover MixingProcess, HeatingProcess, etc.
 # Hide the original opensemantic mixing classes to avoid confusion.
-_inv = build_inventory(
-    include_properties=False,
-    include_property_def=False,
+schema_catalog.configure_inventory(
     extra_modules=[process_models],
+    hidden_paths=process_models.HIDDEN_SCHEMA_PATHS,
 )
-for _path in process_models.HIDDEN_SCHEMA_PATHS:
-    _inv.items.pop(_path, None)
-schema_catalog._cached_inventory = _inv
 
 # ---------------------------------------------------------------------------
 # Process-chain test cases

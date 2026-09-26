@@ -7,14 +7,28 @@ import opensemantic.core.v1._model
 import opensemantic.base.v1._model
 import opensemantic.lab.v1._model
 
-# load the source code of the opensemantic.core.v1 module
 import inspect
-source_code = "##### opensemantic.core.v1 #####\n\n"
-source_code += inspect.getsource(opensemantic.core.v1._model)
-source_code += "\n\n##### opensemantic.base.v1 #####\n\n"
-source_code += inspect.getsource(opensemantic.base.v1._model)
-source_code += "\n\n##### opensemantic.lab.v1 #####\n\n"
-source_code += inspect.getsource(opensemantic.lab.v1._model)
+
+_source_code: str | None = None
+
+
+def get_source_code() -> str:
+    """Source of the opensemantic model modules.
+
+    About 490 kB of ``inspect.getsource``, so it is built on first use rather
+    than at import time.
+    """
+    global _source_code
+    if _source_code is None:
+        _source_code = (
+            "##### opensemantic.core.v1 #####\n\n"
+            + inspect.getsource(opensemantic.core.v1._model)
+            + "\n\n##### opensemantic.base.v1 #####\n\n"
+            + inspect.getsource(opensemantic.base.v1._model)
+            + "\n\n##### opensemantic.lab.v1 #####\n\n"
+            + inspect.getsource(opensemantic.lab.v1._model)
+        )
+    return _source_code
 
 
 class SchemaClass(BaseModel):
@@ -205,8 +219,15 @@ def build_inventory(
     for module in modules:
         for name, obj in inspect.getmembers(module):
             if _is_schema_class(obj):
-                module_name = module.__name__.replace('._model', '')
-                full_path = f"{module_name}.{name}"
+                # Key on where the class is defined, not on where it happens
+                # to be bound. base.v1 re-exports 41 core.v1 classes; keying
+                # on the binding name puts paths in the enum that the
+                # catalogue markdown, get_entity_class_path() and
+                # _get_all_superclasses() all spell differently.
+                module_name = obj.__module__.replace('._model', '')
+                full_path = f"{module_name}.{obj.__name__}"
+                if full_path in items:
+                    continue
                 markdown = get_data_schema_markdown(
                     obj, include_properties, include_property_def
                 )
@@ -225,32 +246,59 @@ def build_inventory(
     return SchemaClassInventory(items=items)
 
 
-# Build a cached inventory for the enum
-_cached_inventory: SchemaClassInventory | None = None
+_EXTRA_MODULES: List[Any] = []
+_HIDDEN_PATHS: set = set()
+_inventory_cache: Dict[tuple, SchemaClassInventory] = {}
+
+
+def configure_inventory(
+    extra_modules: List[Any] = None,
+    hidden_paths: List[str] = None,
+) -> None:
+    """Set which classes every inventory build sees, and drop the cache.
+
+    ``extra_modules`` adds modules beyond core/base/lab. ``hidden_paths``
+    removes full paths from the result, which is how the catalogue offered to
+    a model is trimmed. Both apply to the prompt markdown and to the enum, so
+    the two cannot disagree.
+    """
+    global _EXTRA_MODULES, _HIDDEN_PATHS
+    _EXTRA_MODULES = list(extra_modules or [])
+    _HIDDEN_PATHS = set(hidden_paths or ())
+    _inventory_cache.clear()
+
+
+def get_inventory(
+    include_properties: bool = False, include_property_def: bool = False
+) -> SchemaClassInventory:
+    """Inventory for one property verbosity, cached per verbosity."""
+    key = (include_properties, include_property_def)
+    if key not in _inventory_cache:
+        inventory_obj = build_inventory(
+            include_properties,
+            include_property_def,
+            extra_modules=_EXTRA_MODULES,
+        )
+        for path in _HIDDEN_PATHS:
+            inventory_obj.items.pop(path, None)
+        _inventory_cache[key] = inventory_obj
+    return _inventory_cache[key]
 
 
 def get_cached_inventory() -> SchemaClassInventory:
-    """Get the cached inventory, building it if necessary."""
-    global _cached_inventory
-    if _cached_inventory is None:
-        _cached_inventory = build_inventory(
-            include_properties=False, include_property_def=False
-        )
-    return _cached_inventory
+    """Inventory without property detail, the form the enum is built from."""
+    return get_inventory(include_properties=False, include_property_def=False)
 
 
 def get_data_schema_inventory_markdown(
     include_properties: bool = True, include_property_def: bool = True
 ) -> str:
     """Returns a markdown list of all available data models in opensemantic."""
-    inventory_obj = build_inventory(include_properties, include_property_def)
+    inventory_obj = get_inventory(include_properties, include_property_def)
     result = "# Available Data Models\n\n"
     for schema_class in inventory_obj.items.values():
         result += schema_class.markdown
     return result
-
-
-source_markdown = get_data_schema_inventory_markdown()
 
 
 def suggest_existing_or_new_schema(prompt: str) -> str:
@@ -266,7 +314,7 @@ def suggest_existing_or_new_schema(prompt: str) -> str:
             "If the existing data models are not sufficient, "
             "extend them by adding a new class."
             "Attached is the source code of data models you can choose from:"
-            "\n\n" + source_code
+            "\n\n" + get_source_code()
         ),
         (
             "human", prompt

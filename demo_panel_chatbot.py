@@ -18,19 +18,15 @@ from panelini.panels.visnetwork import VisNetwork
 from dummy_backend import DummyBackend
 from oold_agent3 import MultiStepAgent
 import schema_catalog
-from schema_catalog import build_inventory, get_cached_inventory
+from schema_catalog import get_cached_inventory
 import process_models  # noqa: F401 — needed for agent eval resolution
 
 # Register custom process models in schema inventory and hide
 # conflicting original mixing classes.
-_inv = build_inventory(
-    include_properties=False,
-    include_property_def=False,
+schema_catalog.configure_inventory(
     extra_modules=[process_models],
+    hidden_paths=process_models.HIDDEN_SCHEMA_PATHS,
 )
-for _path in process_models.HIDDEN_SCHEMA_PATHS:
-    _inv.items.pop(_path, None)
-schema_catalog._cached_inventory = _inv
 
 # ---------------------------------------------------------------------------
 # Constants
