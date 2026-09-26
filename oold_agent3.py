@@ -1181,11 +1181,6 @@ class MultiStepAgent(BaseModel):
         Returns dict mapping entity IRI -> OswBaseModel instance.
         """
         self.entities = {}
-        self.token_usage = {
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "total_tokens": 0,
-        }
 
         # Step 1: Detect entities and schemas
         detected_entities = self._step1_detect_entities(prompt)

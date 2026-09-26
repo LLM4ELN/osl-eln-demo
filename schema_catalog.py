@@ -280,7 +280,7 @@ def suggest_existing_or_new_schema(prompt: str) -> str:
         ai_msg = ai_reply.content
     return ai_msg
 
-def lookup_exact_schema(prompt: str) -> str:
+def lookup_exact_schema(prompt: str, token_accumulator=None) -> str:
     """Ask the LLM to select the most suitable data model for the given task.
 
     Uses an enum of valid schema paths to constrain LLM selection.
@@ -359,6 +359,21 @@ def lookup_exact_schema(prompt: str) -> str:
             {"role": "user", "content": prompt}
         ]
     })
+
+    if token_accumulator is not None:
+        for msg in response.get("messages", []):
+            um = getattr(msg, "usage_metadata", None)
+            if um:
+                token_accumulator["input_tokens"] += (
+                    um.get("input_tokens", 0)
+                )
+                token_accumulator["output_tokens"] += (
+                    um.get("output_tokens", 0)
+                )
+                token_accumulator["total_tokens"] += (
+                    um.get("input_tokens", 0)
+                    + um.get("output_tokens", 0)
+                )
 
     result = response["structured_response"]
     module_path = result["module_path"]

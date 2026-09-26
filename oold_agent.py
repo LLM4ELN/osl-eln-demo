@@ -36,6 +36,22 @@ from osl_init import lookup_excact_matching_entity, LookupResult
 _schema_build_cache: Dict[str, Any] = {}
 
 
+def _extract_token_usage(result: dict) -> dict:
+    """Extract token usage from agent.invoke() result messages."""
+    input_tokens = 0
+    output_tokens = 0
+    for msg in result.get("messages", []):
+        um = getattr(msg, "usage_metadata", None)
+        if um:
+            input_tokens += um.get("input_tokens", 0)
+            output_tokens += um.get("output_tokens", 0)
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
+    }
+
+
 class CreateParam(BaseModel):
     """Parameters for creating or looking up an entity."""
     parent_id: str = "_root_"
@@ -106,6 +122,15 @@ class OoldAgent(BaseModel):
     entity_requests: Dict[str, CreateParam] = Field(default_factory=dict)
     """Previous entity creation requests, keyed by entity ID."""
 
+    token_usage: Dict[str, int] = Field(
+        default_factory=lambda: {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+        }
+    )
+    """Accumulated token usage across all LLM calls of this agent instance."""
+
     model_config = {
         "arbitrary_types_allowed": True,
     }
@@ -121,6 +146,13 @@ class OoldAgent(BaseModel):
         if self.llm is None:
             object.__setattr__(self, 'llm', get_llm())
         return self.llm
+
+    def _accumulate_tokens(self, result: dict):
+        """Add token usage from an agent.invoke() result."""
+        usage = _extract_token_usage(result)
+        self.token_usage["input_tokens"] += usage["input_tokens"]
+        self.token_usage["output_tokens"] += usage["output_tokens"]
+        self.token_usage["total_tokens"] += usage["total_tokens"]
 
     def _schemas_are_compatible(
         self, schema_id_1: str, schema_id_2: str
@@ -205,6 +237,7 @@ class OoldAgent(BaseModel):
                     {"role": "user", "content": prompt}
                 ]
             })
+            self._accumulate_tokens(result)
 
             if "structured_response" in result:
                 parsed = FillableProperties(**result["structured_response"])
@@ -348,6 +381,7 @@ If no match is found, return an empty string for matching_entity_id.
                     }
                 ]
             })
+            self._accumulate_tokens(result)
 
             if "structured_response" in result:
                 comparison = ComparisonResult(**result["structured_response"])
@@ -521,7 +555,9 @@ If no match is found, return an empty string for matching_entity_id.
             prompt += "The entity I want to describe: "
             prompt += param.entity_description + ". "
 
-        schema_name = lookup_exact_schema(prompt)
+        schema_name = lookup_exact_schema(
+            prompt, token_accumulator=self.token_usage
+        )
         print(f"LLM returned class path: {schema_name}")
 
         # Check cache first
@@ -652,6 +688,8 @@ If no match is found, return an empty string for matching_entity_id.
                 print(f"Error invoking agent: {e}")
                 return None
 
+            self._accumulate_tokens(result)
+
             if "structured_response" not in result:
                 print(
                     f"Error: Agent result does not contain "
@@ -748,7 +786,8 @@ If no match is found, return an empty string for matching_entity_id.
         lookup_result = lookup_excact_matching_entity(
             vector_store=self.vector_store,
             description=data_instance_description,
-            llm_judge=self.use_llm_judge
+            llm_judge=self.use_llm_judge,
+            token_accumulator=self.token_usage,
         )
         if lookup_result is not None and lookup_result.osw_id:
             if lookup_result.needs_update:
