@@ -369,7 +369,9 @@ class MultiStepAgent(BaseModel):
             return []
 
         parsed = SchemaDetectionResult(**result["structured_response"])
-        self._validate_schema_names(parsed.entities, valid_paths)
+        parsed.entities = self._validate_schema_names(
+            parsed.entities, valid_paths
+        )
 
         print(
             f"Detected {len(parsed.entities)} entities "
