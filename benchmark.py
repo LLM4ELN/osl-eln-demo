@@ -165,7 +165,19 @@ class ModelBenchmarkResult:
     agent_type: str = "iterative"
     model_config: Dict[str, Any] = field(default_factory=dict)
     """Model configuration from benchmark_config.yaml (litellm_params, provider, etc.)."""
+    enforcement: Dict[str, Any] = field(default_factory=dict)
+    """Enforcement condition in effect: catalogue mode, decode constraint, catalogue size."""
     runs: List[BenchmarkResult] = field(default_factory=list)
+
+
+def get_enforcement() -> Dict[str, Any]:
+    """The enforcement condition a run was executed under."""
+    return {
+        "catalogue_mode": os.environ.get("CATALOGUE_MODE", "full").lower(),
+        "decode_constraint": os.environ.get("DECODE_CONSTRAINT", "enum").lower(),
+        "catalogue_size": len(get_cached_inventory().get_all_full_paths()),
+        "limit_str_fields": os.environ.get("LIMIT_STR_FIELDS", "false"),
+    }
 
 
 # Test cases from the playbook
@@ -744,7 +756,10 @@ def _run_benchmarks_for_model(
     }
 
     model_result = ModelBenchmarkResult(
-        model=model, agent_type=agent_type, model_config=safe_config
+        model=model,
+        agent_type=agent_type,
+        model_config=safe_config,
+        enforcement=get_enforcement(),
     )
 
     if run_runs_parallel:
